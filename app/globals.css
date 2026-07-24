@@ -92,6 +92,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .odds-title strong { font-size:11px; }
 .odds-title>span { color:var(--mlb-navy); font-family:var(--font-mono); font-size:10px; font-weight:800; }
 .odds-inputs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:11px 0; }
+.odds-inputs.three { grid-template-columns:repeat(3,1fr); }
 .odds-inputs label { display:grid; gap:4px; color:#667287; font-size:9px; font-weight:700; }
 .odds-inputs input { width:100%; border:1px solid #cfd7e3; border-radius:6px; background:#fff; color:var(--ink); padding:8px; font-family:var(--font-mono); font-size:12px; font-weight:700; }
 .odds-inputs input:focus { outline:2px solid #b9d4f5; border-color:var(--mlb-blue); }
@@ -102,6 +103,9 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .decision.qualifies { color:#145b42; background:#e7f5ed; border:1px solid #c8e4d5; }
 .decision.pass { color:#794854; background:#fff0f3; border:1px solid #f0d1d8; }
 .input-help { margin:4px 0 0; color:#7c8798; font-size:9px; }
+.market-tabs { display:flex; gap:4px; margin:-3px 0 12px; padding-bottom:10px; border-bottom:1px solid #e1e6ee; }
+.market-tabs button { flex:1; border:1px solid #d7dee8; border-radius:5px; background:#fff; color:#687386; padding:6px 4px; cursor:pointer; font-size:8px; font-weight:800; }
+.market-tabs button.active { border-color:var(--mlb-navy); background:var(--mlb-navy); color:#fff; }
 .starter-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 14px; }
 .starter-grid>div { display:grid; gap:3px; padding:9px; border:1px solid #e1e6ee; border-radius:7px; background:#fafbfd; }
 .starter-grid small { color:#7c8798; font-size:8px; font-weight:850; letter-spacing:.06em; }
@@ -117,7 +121,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .calibration-track i { display:block; height:100%; border-radius:10px; background:#8db3df; }
 .calibration-track b { position:absolute; top:-3px; width:3px; height:13px; border-radius:2px; background:var(--mlb-red); transform:translateX(-1px); }
 .performance-foot { display:flex; justify-content:space-between; gap:16px; padding:10px 22px; border-top:1px solid #edf0f4; background:#fafbfd; color:#7d8898; font-size:9px; }
-@media(max-width:520px){.decision{grid-template-columns:1fr 1fr}.odds-inputs{grid-template-columns:1fr}}
+@media(max-width:520px){.decision{grid-template-columns:1fr 1fr}.odds-inputs,.odds-inputs.three{grid-template-columns:1fr}}
 @media(max-width:620px){.calibration-row{grid-template-columns:52px 1fr 65px}.calibration-row>small{display:none}.performance-foot{display:grid}}
 .game-status { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; }
 .game-status span { color:#6f7a8b; background:#f0f3f7; border-radius:5px; padding:4px 6px; font-size:8px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fairAmerican, impliedProbability, inningsToDecimal, priceDecision, projectScore, starterRunAdjustment } from "../lib/modeling.ts";
+import { fairAmerican, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectScore, starterRunAdjustment } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -30,4 +30,12 @@ test("risk gate rejects small edge and sizes qualifying edge conservatively", ()
   const decision = priceDecision(0.62, -110, 0.4);
   assert.equal(decision?.qualifies, true);
   assert.ok((decision?.stakeFraction ?? 0) > 0 && (decision?.stakeFraction ?? 1) <= 0.005);
+});
+
+test("removes two-sided sportsbook vig before calculating edge", () => {
+  assert.equal(noVigProbability(-110,-110)?.toFixed(4),"0.5000");
+  const decision=priceDecision(0.54,-110,0.4,-110);
+  assert.equal(decision?.vigRemoved,true);
+  assert.equal(decision?.marketProbability.toFixed(4),"0.5000");
+  assert.equal(decision?.edge.toFixed(4),"0.0400");
 });

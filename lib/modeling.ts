@@ -21,9 +21,18 @@ export function impliedProbability(americanOdds: number) {
     : 100 / (americanOdds + 100);
 }
 
-export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4) {
-  const marketProbability = impliedProbability(americanOdds);
-  if (marketProbability == null) return null;
+export function noVigProbability(primaryOdds: number, opposingOdds: number) {
+  const primary = impliedProbability(primaryOdds);
+  const opposing = impliedProbability(opposingOdds);
+  if (primary == null || opposing == null) return null;
+  return primary / (primary + opposing);
+}
+
+export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4, opposingOdds?: number) {
+  const rawImpliedProbability = impliedProbability(americanOdds);
+  if (rawImpliedProbability == null) return null;
+  const noVig = opposingOdds == null ? null : noVigProbability(americanOdds, opposingOdds);
+  const marketProbability = noVig ?? rawImpliedProbability;
   const decimalOdds = americanOdds > 0 ? 1 + americanOdds / 100 : 1 + 100 / Math.abs(americanOdds);
   const edge = modelProbability - marketProbability;
   const expectedValue = modelProbability * (decimalOdds - 1) - (1 - modelProbability);
@@ -31,7 +40,7 @@ export function priceDecision(modelProbability: number, americanOdds: number, un
   // High uncertainty means smaller stakes; never recommend more than 0.5% of bankroll.
   const stakeFraction = clamp(fullKelly * 0.25 * (1 - uncertainty), 0, 0.005);
   const qualifies = edge >= 0.025 && expectedValue > 0.02 && uncertainty <= 0.55;
-  return { marketProbability, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
+  return { marketProbability, rawImpliedProbability, vigRemoved: noVig != null, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
 }
 
 export function inningsToDecimal(value: string | number | null | undefined) {
