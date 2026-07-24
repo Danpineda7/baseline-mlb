@@ -14,6 +14,26 @@ export function fairAmerican(probability: number) {
   return `${price > 0 ? "+" : ""}${Math.round(price)}`;
 }
 
+export function impliedProbability(americanOdds: number) {
+  if (!Number.isFinite(americanOdds) || americanOdds === 0 || Math.abs(americanOdds) < 100) return null;
+  return americanOdds < 0
+    ? Math.abs(americanOdds) / (Math.abs(americanOdds) + 100)
+    : 100 / (americanOdds + 100);
+}
+
+export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4) {
+  const marketProbability = impliedProbability(americanOdds);
+  if (marketProbability == null) return null;
+  const decimalOdds = americanOdds > 0 ? 1 + americanOdds / 100 : 1 + 100 / Math.abs(americanOdds);
+  const edge = modelProbability - marketProbability;
+  const expectedValue = modelProbability * (decimalOdds - 1) - (1 - modelProbability);
+  const fullKelly = expectedValue / (decimalOdds - 1);
+  // High uncertainty means smaller stakes; never recommend more than 0.5% of bankroll.
+  const stakeFraction = clamp(fullKelly * 0.25 * (1 - uncertainty), 0, 0.005);
+  const qualifies = edge >= 0.025 && expectedValue > 0.02 && uncertainty <= 0.55;
+  return { marketProbability, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
+}
+
 export function projectScore(awayRuns: number, homeRuns: number, totalLine = 8.5) {
   let awayWin = 0;
   let homeWin = 0;
@@ -50,4 +70,3 @@ export function projectScore(awayRuns: number, homeRuns: number, totalLine = 8.5
     push: push / (over + under + push),
   };
 }
-
