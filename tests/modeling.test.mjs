@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fairAmerican, impliedProbability, priceDecision, projectScore } from "../lib/modeling.ts";
+import { fairAmerican, impliedProbability, inningsToDecimal, priceDecision, projectScore, starterRunAdjustment } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
   assert.equal(impliedProbability(150)?.toFixed(4), "0.4000");
   assert.equal(impliedProbability(50), null);
   assert.equal(fairAmerican(0.6), "-150");
+});
+
+test("starter adjustment regresses small samples and understands baseball innings", () => {
+  assert.equal(inningsToDecimal("12.2").toFixed(3), "12.667");
+  assert.equal(inningsToDecimal("12.3"), 0);
+  const smallSample=starterRunAdjustment(2,10);
+  const largeSample=starterRunAdjustment(2,100);
+  assert.ok(Math.abs(smallSample)<Math.abs(largeSample));
+  assert.ok(largeSample<0);
+  assert.equal(starterRunAdjustment(null,100),0);
 });
 
 test("score distribution is normalized", () => {

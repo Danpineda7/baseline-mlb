@@ -34,6 +34,22 @@ export function priceDecision(modelProbability: number, americanOdds: number, un
   return { marketProbability, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
 }
 
+export function inningsToDecimal(value: string | number | null | undefined) {
+  if (typeof value === "number") return value;
+  if (!value) return 0;
+  const [whole, outs = "0"] = value.split(".");
+  const parsedWhole = Number(whole);
+  const parsedOuts = Number(outs);
+  return Number.isFinite(parsedWhole) && parsedOuts >= 0 && parsedOuts <= 2 ? parsedWhole + parsedOuts / 3 : 0;
+}
+
+export function starterRunAdjustment(era: number | null, innings: number, leagueEra = 4.3) {
+  if (era == null || !Number.isFinite(era) || innings <= 0) return 0;
+  const reliability = innings / (innings + 40);
+  const regressedEra = reliability * era + (1 - reliability) * leagueEra;
+  return clamp((regressedEra - leagueEra) * (5.5 / 9), -0.75, 0.75);
+}
+
 export function projectScore(awayRuns: number, homeRuns: number, totalLine = 8.5) {
   let awayWin = 0;
   let homeWin = 0;

@@ -1,4 +1,4 @@
-import { clamp, fairAmerican, projectScore } from "@/lib/modeling";
+import { clamp, fairAmerican, inningsToDecimal, projectScore, starterRunAdjustment } from "@/lib/modeling";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -14,11 +14,13 @@ type SchedulePayload = {
     status?: { abstractGameState?: string; detailedState?: string };
     venue?: { name?: string };
     teams?: {
-      away?: { team?: { id?: number; name?: string; abbreviation?: string }; probablePitcher?: { fullName?: string } };
-      home?: { team?: { id?: number; name?: string; abbreviation?: string }; probablePitcher?: { fullName?: string } };
+      away?: { team?: { id?: number; name?: string; abbreviation?: string }; probablePitcher?: { id?:number; fullName?: string } };
+      home?: { team?: { id?: number; name?: string; abbreviation?: string }; probablePitcher?: { id?:number; fullName?: string } };
     };
   }> }>;
 };
+type PitchingStat = { era?: string; inningsPitched?: string; gamesStarted?: number };
+type PeoplePayload = { people?: Array<{ id?: number; stats?: Array<{ splits?: Array<{ stat?: PitchingStat }> }> }> };
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -46,13 +48,22 @@ export async function GET(request: Request) {
     if (!scheduleResponse.ok || !standingsResponse.ok) throw new Error("One or more MLB feeds did not respond successfully");
     const schedule = await scheduleResponse.json() as SchedulePayload;
     const standings = await standingsResponse.json() as StandingsPayload;
+    const scheduledGames=(schedule.dates ?? []).flatMap((day) => day.games ?? []);
+    const pitcherIds=[...new Set(scheduledGames.flatMap(game=>[game.teams?.away?.probablePitcher?.id,game.teams?.home?.probablePitcher?.id]).filter((id):id is number=>Boolean(id)))];
+    const pitcherStats=new Map<number,{era:number;innings:number;gamesStarted:number}>();
+    if(pitcherIds.length){
+      const peopleUrl=new URL("https://statsapi.mlb.com/api/v1/people");
+      peopleUrl.searchParams.set("personIds",pitcherIds.join(","));
+      peopleUrl.searchParams.set("hydrate",`stats(group=[pitching],type=[season],season=${season})`);
+      try { const peopleResponse=await fetch(peopleUrl,{headers:{accept:"application/json"}}); if(peopleResponse.ok){const people=await peopleResponse.json() as PeoplePayload; for(const person of people.people??[]){const stat=person.stats?.[0]?.splits?.[0]?.stat;const era=Number(stat?.era);if(person.id&&Number.isFinite(era))pitcherStats.set(person.id,{era,innings:inningsToDecimal(stat?.inningsPitched),gamesStarted:stat?.gamesStarted??0});}} } catch { /* Team-only fallback remains valid and is disclosed. */ }
+    }
     const records = (standings.records ?? []).flatMap((record) => record.teamRecords ?? []).filter((record) => (record.gamesPlayed ?? 0) > 0);
     const byTeam = new Map(records.map((record) => [record.team?.id ?? 0, record]));
     const leagueRuns = records.reduce((sum, record) => sum + (record.runsScored ?? 0), 0);
     const leagueGames = records.reduce((sum, record) => sum + (record.gamesPlayed ?? 0), 0);
     const leagueAverage = leagueGames > 0 ? leagueRuns / leagueGames : 4.5;
 
-    const games = (schedule.dates ?? []).flatMap((day) => day.games ?? []).map((game) => {
+    const games = scheduledGames.map((game) => {
       const awayId = game.teams?.away?.team?.id ?? 0;
       const homeId = game.teams?.home?.team?.id ?? 0;
       const away = byTeam.get(awayId);
@@ -66,8 +77,12 @@ export async function GET(request: Request) {
       // Multiplicative offense/defense blend, regressed 35% to league average.
       const awayRaw = Math.sqrt(awayOffense * homeDefense);
       const homeRaw = Math.sqrt(homeOffense * awayDefense);
-      const awayRuns = clamp(0.65 * awayRaw + 0.35 * leagueAverage - 0.08, 2.2, 7.2);
-      const homeRuns = clamp(0.65 * homeRaw + 0.35 * leagueAverage + 0.08, 2.2, 7.2);
+      const awayStarter=pitcherStats.get(game.teams?.away?.probablePitcher?.id??0);
+      const homeStarter=pitcherStats.get(game.teams?.home?.probablePitcher?.id??0);
+      const awayStarterAdjustment=starterRunAdjustment(awayStarter?.era??null,awayStarter?.innings??0);
+      const homeStarterAdjustment=starterRunAdjustment(homeStarter?.era??null,homeStarter?.innings??0);
+      const awayRuns = clamp(0.65 * awayRaw + 0.35 * leagueAverage - 0.08 + homeStarterAdjustment, 2.2, 7.2);
+      const homeRuns = clamp(0.65 * homeRaw + 0.35 * leagueAverage + 0.08 + awayStarterAdjustment, 2.2, 7.2);
       const distribution = projectScore(awayRuns, homeRuns);
       const missingTeams = Number(!away) + Number(!home);
       const uncertainty = clamp(42 + missingTeams * 25 + (season === new Date().getUTCFullYear() ? 0 : 8), 35, 95);
@@ -79,8 +94,8 @@ export async function GET(request: Request) {
         status: game.status?.detailedState ?? "Unknown",
         state: game.status?.abstractGameState ?? "Preview",
         venue: game.venue?.name ?? "Venue TBD",
-        away: { id: awayId, name: awayName, abbreviation: game.teams?.away?.team?.abbreviation ?? "AWY", probablePitcher: game.teams?.away?.probablePitcher?.fullName ?? null, expectedRuns: Number(awayRuns.toFixed(2)), winProbability: Number(distribution.awayWin.toFixed(4)), fairPrice: fairAmerican(distribution.awayWin) },
-        home: { id: homeId, name: homeName, abbreviation: game.teams?.home?.team?.abbreviation ?? "HME", probablePitcher: game.teams?.home?.probablePitcher?.fullName ?? null, expectedRuns: Number(homeRuns.toFixed(2)), winProbability: Number(distribution.homeWin.toFixed(4)), fairPrice: fairAmerican(distribution.homeWin) },
+        away: { id: awayId, name: awayName, abbreviation: game.teams?.away?.team?.abbreviation ?? "AWY", probablePitcher: game.teams?.away?.probablePitcher?.fullName ?? null, starter:awayStarter?{era:awayStarter.era,innings:Number(awayStarter.innings.toFixed(1)),gamesStarted:awayStarter.gamesStarted,runAdjustment:Number(awayStarterAdjustment.toFixed(2))}:null, expectedRuns: Number(awayRuns.toFixed(2)), winProbability: Number(distribution.awayWin.toFixed(4)), fairPrice: fairAmerican(distribution.awayWin) },
+        home: { id: homeId, name: homeName, abbreviation: game.teams?.home?.team?.abbreviation ?? "HME", probablePitcher: game.teams?.home?.probablePitcher?.fullName ?? null, starter:homeStarter?{era:homeStarter.era,innings:Number(homeStarter.innings.toFixed(1)),gamesStarted:homeStarter.gamesStarted,runAdjustment:Number(homeStarterAdjustment.toFixed(2))}:null, expectedRuns: Number(homeRuns.toFixed(2)), winProbability: Number(distribution.homeWin.toFixed(4)), fairPrice: fairAmerican(distribution.homeWin) },
         total: { line: 8.5, expectedRuns: Number((awayRuns + homeRuns).toFixed(2)), overProbability: Number(distribution.over.toFixed(4)), underProbability: Number(distribution.under.toFixed(4)), overFairPrice: fairAmerican(distribution.over), underFairPrice: fairAmerican(distribution.under) },
         uncertainty,
         recommendation: { status: "NO_BET", reason: "A verified sportsbook price is required to calculate edge." },
@@ -88,13 +103,14 @@ export async function GET(request: Request) {
           `${awayName}: ${awayOffense.toFixed(2)} runs scored per game`,
           `${homeName}: ${homeOffense.toFixed(2)} runs scored per game`,
           `League environment: ${leagueAverage.toFixed(2)} runs per team-game`,
+          awayStarter&&homeStarter?`Starter adjustment: ${game.teams?.away?.probablePitcher?.fullName} ${awayStarter.era.toFixed(2)} ERA · ${game.teams?.home?.probablePitcher?.fullName} ${homeStarter.era.toFixed(2)} ERA`:`Starter statistics unavailable or probable starter pending`,
         ],
       };
     }).filter((game) => game.id > 0);
 
     return Response.json({
       date, season, games, count: games.length, retrievedAt: new Date().toISOString(),
-      model: { name: "Team Run Baseline v0.1", calibrated: false, inputs: ["season runs scored", "season runs allowed", "home-field adjustment", "Poisson score distribution"], omissions: ["confirmed lineups", "starter quality", "bullpen availability", "weather", "park factors", "market odds"] },
+      model: { name: "Run + Starter Baseline v0.2", calibrated: false, inputs: ["season runs scored", "season runs allowed", "probable-starter ERA regressed by innings", "home-field adjustment", "Poisson score distribution"], omissions: ["confirmed lineups", "bullpen availability", "weather", "park factors", "market odds"] },
       source: "MLB Stats API",
     }, { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=180" } });
   } catch (error) {

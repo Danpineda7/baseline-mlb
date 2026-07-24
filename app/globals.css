@@ -102,6 +102,11 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .decision.qualifies { color:#145b42; background:#e7f5ed; border:1px solid #c8e4d5; }
 .decision.pass { color:#794854; background:#fff0f3; border:1px solid #f0d1d8; }
 .input-help { margin:4px 0 0; color:#7c8798; font-size:9px; }
+.starter-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 14px; }
+.starter-grid>div { display:grid; gap:3px; padding:9px; border:1px solid #e1e6ee; border-radius:7px; background:#fafbfd; }
+.starter-grid small { color:#7c8798; font-size:8px; font-weight:850; letter-spacing:.06em; }
+.starter-grid strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.starter-grid span { color:#687386; font-family:var(--font-mono); font-size:9px; }
 .performance-panel { margin:0 0 18px; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 2px 8px #243b3210; overflow:hidden; }
 .calibration-grid { border-top:1px solid #edf0f4; padding:8px 22px; }
 .calibration-row { display:grid; grid-template-columns:62px minmax(120px,1fr) 72px 42px; gap:12px; align-items:center; min-height:34px; font-size:9px; color:#707c8d; }
