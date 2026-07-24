@@ -1,5 +1,6 @@
 import { clamp, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, inningsToDecimal, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "@/lib/modeling";
 import { applyProbabilityCalibration, walkForwardBacktest, type CalibrationModel, type HistoricalGame } from "@/lib/backtest";
+import { projectionUncertainty, slateQualityScore } from "@/lib/data-quality";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -111,7 +112,9 @@ export async function GET(request: Request) {
       const firstFive=projectPeriod(awayRuns*firstFiveShare,homeRuns*firstFiveShare);
       const firstInning=firstInningMarkets(awayRuns,homeRuns,firstInningShare);
       const missingTeams = Number(!away) + Number(!home);
-      const uncertainty = clamp(42 + missingTeams * 25 + (season === new Date().getUTCFullYear() ? 0 : 8)+Math.abs(parkFactor-1)*40, 35, 95);
+      const lineupsConfirmed=Boolean(game.lineups?.awayPlayers?.length&&game.lineups?.homePlayers?.length);
+      const missingStarters=Number(!awayStarter)+Number(!homeStarter);
+      const uncertainty = projectionUncertainty({missingTeams,missingStarters,lineupsConfirmed,weatherAvailable:conditions.temperature!=null,parkGames:parkSample.homeGames+parkSample.roadGames,parkFactor,historicalSeason:season!==new Date().getUTCFullYear()});
       const awayName = game.teams?.away?.team?.name ?? "Away TBD";
       const homeName = game.teams?.home?.team?.name ?? "Home TBD";
       const lineup=(players:Array<{id?:number;fullName?:string}>)=>players.slice(0,9).map((player,index)=>{const stats=hitterStats.get(player.id??0),projection=stats?.projection;return{id:player.id??0,name:player.fullName??"Unknown hitter",battingOrder:index+1,confirmed:true,avg:stats?.avg??null,ops:stats?.ops??null,expectedHits:projection?Number(projection.expectedHits.toFixed(3)):null,onePlusHitProbability:projection?Number(projection.onePlusProbability.toFixed(4)):null,fairPrice:projection?fairAmerican(projection.onePlusProbability):null};});
@@ -128,7 +131,8 @@ export async function GET(request: Request) {
         total: { line: 8.5, expectedRuns: Number((awayRuns + homeRuns).toFixed(2)), overProbability: Number(distribution.over.toFixed(4)), underProbability: Number(distribution.under.toFixed(4)), overFairPrice: fairAmerican(distribution.over), underFairPrice: fairAmerican(distribution.under) },
         firstFive:{expectedRuns:Number(((awayRuns+homeRuns)*firstFiveShare).toFixed(2)),awayWinProbability:Number(firstFive.awayNoPush.toFixed(4)),homeWinProbability:Number(firstFive.homeNoPush.toFixed(4)),pushProbability:Number(firstFive.tie.toFixed(4)),awayFairPrice:fairAmerican(firstFive.awayNoPush),homeFairPrice:fairAmerican(firstFive.homeNoPush)},
         firstInning:{expectedRuns:Number(firstInning.expectedRuns.toFixed(2)),nrfiProbability:Number(firstInning.nrfi.toFixed(4)),yrfiProbability:Number(firstInning.yrfi.toFixed(4)),nrfiFairPrice:fairAmerican(firstInning.nrfi),yrfiFairPrice:fairAmerican(firstInning.yrfi)},
-        lineups:{away:lineup(game.lineups?.awayPlayers??[]),home:lineup(game.lineups?.homePlayers??[]),confirmed:Boolean(game.lineups?.awayPlayers?.length&&game.lineups?.homePlayers?.length)},
+        lineups:{away:lineup(game.lineups?.awayPlayers??[]),home:lineup(game.lineups?.homePlayers??[]),confirmed:lineupsConfirmed},
+        quality:{teamRecords:Boolean(away&&home),starterStats:missingStarters===0,awayStarter:Boolean(awayStarter),homeStarter:Boolean(homeStarter),lineups:lineupsConfirmed,weather:conditions.temperature!=null,parkSample:parkSample.homeGames>=20&&parkSample.roadGames>=20,blockingReasons:[!away||!home?"Team season record missing":null,missingStarters?"One or more probable-starter stat lines missing":null].filter((reason):reason is string=>Boolean(reason))},
         uncertainty,
         recommendation: { status: "NO_BET", reason: "A verified sportsbook price is required to calculate edge." },
         drivers: [
@@ -143,8 +147,19 @@ export async function GET(request: Request) {
       };
     }).filter((game) => game.id > 0);
 
+    const currentTeamIds=[...new Set(scheduledGames.flatMap(game=>[game.teams?.away?.team?.id,game.teams?.home?.team?.id]).filter((id):id is number=>Boolean(id)))];
+    const coverage={
+      teams:{available:currentTeamIds.filter(id=>byTeam.has(id)).length,expected:currentTeamIds.length},
+      starters:{available:games.reduce((sum,game)=>sum+Number(game.quality.awayStarter)+Number(game.quality.homeStarter),0),expected:games.length*2},
+      lineups:{available:games.filter(game=>game.lineups.confirmed).length,expected:games.length},
+      hitters:{available:games.flatMap(game=>[...game.lineups.away,...game.lineups.home]).filter(hitter=>hitter.onePlusHitProbability!=null).length,expected:games.length*18},
+      weather:{available:games.filter(game=>game.weather.temperature!=null).length,expected:games.length},
+      parks:{available:games.filter(game=>game.quality.parkSample).length,expected:games.length},
+    };
+    const dataHealth={score:slateQualityScore({...coverage,calibrated:calibrationQualified}),coverage,featureCutoff:cutoffDate,historicalFinals:historicalGames.length,calibrated:calibrationQualified,retrievedAt:new Date().toISOString()};
+
     return Response.json({
-      date, season, games, count: games.length, retrievedAt: new Date().toISOString(),
+      date, season, games, count: games.length, retrievedAt: dataHealth.retrievedAt,dataHealth,
       model: { name: "Multi-market Baseline v0.7", calibrated: calibrationQualified, calibrationScope:calibrationQualified?`Team-run moneyline baseline verified; ${calibrationMethod==="identity"?"identity retained because Platt scaling did not improve Brier":"regularized Platt scaling selected"}; starter and park deltas are not separately calibrated`:"Insufficient prior predictions or calibration error above 3%",calibrationMethod,calibrationPoints:calibrationModel?.count??0,featureCutoff:cutoffDate, inputs: ["season runs scored through prior day", "season runs allowed through prior day", "confirmed batting orders", "hitter hit rate regressed by at-bats", "probable-starter ERA regressed by innings", "starter strikeouts per start regressed by starts", "empirical first-inning and first-five run shares", "home-field adjustment", "prior-day home-versus-road run-environment park factor, with 60 league-average games of regression per side", "Poisson distributions", "regularized Platt calibration with an out-of-sample activation gate"], omissions: ["pitcher-batter matchups", "opponent strikeout tendency", "bullpen availability", "calibrated weather effects", "market odds"],inningContext:{games:contextGames,firstInningShare:Number(firstInningShare.toFixed(4)),firstFiveShare:Number(firstFiveShare.toFixed(4))} },
       source: "MLB Stats API",
     }, { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=180" } });
