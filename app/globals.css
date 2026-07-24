@@ -69,3 +69,33 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .driver-list>div>span { background:#e8f0fb; color:var(--mlb-blue); }
 .driver-list p { color:#6e7889; }
 .source-icon { background:#e9eff8; color:var(--mlb-navy); }
+
+.primary-button:disabled { opacity:.68; cursor:wait; }
+.live-slate { background:#fff; border:1px solid var(--line); border-radius:12px; margin:0 0 18px; box-shadow:0 2px 8px #243b3210; overflow:hidden; }
+.live-head { border-bottom:1px solid #edf0f4; }
+.date-controls { display:flex; align-items:center; gap:5px; }
+.date-controls button,.date-controls input { height:32px; border:1px solid #d7dde7; background:#fff; border-radius:6px; color:var(--ink); }
+.date-controls button { width:32px; cursor:pointer; font-weight:800; }
+.date-controls input { padding:0 9px; font-size:11px; font-weight:650; }
+.game-strip { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(245px,1fr); overflow-x:auto; scrollbar-width:thin; }
+.game-tile { padding:15px 17px; border-right:1px solid #edf0f4; min-width:0; }
+.game-status { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; }
+.game-status span { color:#6f7a8b; background:#f0f3f7; border-radius:5px; padding:4px 6px; font-size:8px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }
+.game-status span.live { color:#fff; background:var(--mlb-red); }
+.game-status time { color:#7b8797; font-size:9px; }
+.club-row { display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:8px; min-height:27px; }
+.club-row strong { color:var(--mlb-navy); font-family:var(--font-mono); font-size:11px; }
+.club-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:650; }
+.club-row em { font-family:var(--font-mono); font-size:15px; font-style:normal; font-weight:850; }
+.pitchers { display:grid; grid-template-columns:1fr auto 1fr; gap:6px; align-items:center; margin:10px 0 8px; padding-top:9px; border-top:1px solid #edf0f4; color:#6e7889; font-size:9px; }
+.pitchers span:last-child { text-align:right; }
+.pitchers b { color:#a3acb9; font-size:8px; text-transform:uppercase; }
+.game-tile>small { display:block; color:#929cab; font-size:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.live-foot { display:flex; justify-content:space-between; padding:10px 17px; border-top:1px solid #edf0f4; background:#fafbfd; color:#7d8898; font-size:9px; }
+.live-foot i { display:inline-block; width:6px; height:6px; border-radius:50%; background:#24a16f; margin-right:6px; }
+.slate-state { min-height:132px; display:flex; align-items:center; justify-content:center; gap:10px; color:#718096; font-size:11px; }
+.slate-state.error { flex-direction:column; color:#8b3a4a; }
+.slate-state.error button { border:1px solid #d7dde7; background:#fff; border-radius:6px; padding:6px 10px; cursor:pointer; font-weight:700; }
+.loading-mark { width:15px; height:15px; border:2px solid #d8deea; border-top-color:var(--mlb-blue); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media(max-width:780px){.live-head{flex-direction:row;align-items:center}.game-strip{grid-auto-columns:255px}.live-foot{gap:10px}.notice p{max-width:70ch}}

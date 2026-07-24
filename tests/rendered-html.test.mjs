@@ -13,8 +13,9 @@ test("renders the Baseline analysis cockpit", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /<title>Baseline — MLB Intelligence<\/title>/i);
-  assert.match(html, /Today’s slate/);
-  assert.match(html, /Highest-quality edges/);
+  assert.match(html, /Daily slate/);
+  assert.match(html, /Official schedule/i);
+  assert.match(html, /How priced edges will appear/);
   assert.match(html, /Data lineage/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/);
 });
