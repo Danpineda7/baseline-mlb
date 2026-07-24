@@ -115,6 +115,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .micro-market { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 0; }
 .micro-market span { padding:4px 6px; border-radius:4px; background:#eef2f7; color:#667287; font-family:var(--font-mono); font-size:8px; }
 .starter-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 14px; }
+.environment-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:-5px 0 12px}.environment-grid>div{display:grid;gap:2px;min-width:0;padding:8px;border:1px solid #e1e6ee;border-radius:7px;background:#f7f9fc}.environment-grid small{color:#7c8798;font-size:7px;font-weight:850;letter-spacing:.06em}.environment-grid strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:9px}.environment-grid span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#788396;font-size:8px}
 .starter-grid>div { display:grid; gap:3px; padding:9px; border:1px solid #e1e6ee; border-radius:7px; background:#fafbfd; }
 .starter-grid small { color:#7c8798; font-size:8px; font-weight:850; letter-spacing:.06em; }
 .starter-grid strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
@@ -140,6 +141,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .calibration-track b { position:absolute; top:-3px; width:3px; height:13px; border-radius:2px; background:var(--mlb-red); transform:translateX(-1px); }
 .performance-foot { display:flex; justify-content:space-between; gap:16px; padding:10px 22px; border-top:1px solid #edf0f4; background:#fafbfd; color:#7d8898; font-size:9px; }
 @media(max-width:520px){.decision{grid-template-columns:1fr 1fr}.odds-inputs,.odds-inputs.three{grid-template-columns:1fr}}
+@media(max-width:420px){.environment-grid{grid-template-columns:1fr 1fr}.environment-grid>div:last-child{grid-column:1/-1}}
 @media(max-width:620px){.calibration-row{grid-template-columns:52px 1fr 65px}.calibration-row>small{display:none}.performance-foot{display:grid}}
 @media(max-width:900px){.guide-steps{grid-template-columns:1fr 1fr}.closing-row{grid-template-columns:1fr 90px 90px auto;padding-left:20px}}
 @media(max-width:700px){.ledger-row{grid-template-columns:50px 1fr 48px 48px}.ledger-row>span:nth-of-type(3),.ledger-row>span:nth-of-type(4){display:none}.closing-row{grid-template-columns:1fr 1fr}.closing-row>div{grid-column:1/-1}.save-strip,.consensus-strip{grid-template-columns:1fr}.save-strip button,.consensus-strip button{width:100%}}

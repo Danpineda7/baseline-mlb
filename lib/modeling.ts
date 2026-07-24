@@ -72,6 +72,12 @@ export function closingLineValue(openingProbability:number, closingOdds:number, 
   return closingProbability==null?null:{closingProbability,value:closingProbability-openingProbability};
 }
 
+export function empiricalParkFactor(homeRuns:number,homeGames:number,roadRuns:number,roadGames:number,leagueRunsPerGame:number,priorGames=60){
+  if(!Number.isFinite(leagueRunsPerGame)||leagueRunsPerGame<=0||homeGames<0||roadGames<0||homeRuns<0||roadRuns<0)return 1;
+  const homeEnvironment=(homeRuns+priorGames*leagueRunsPerGame)/(homeGames+priorGames),roadEnvironment=(roadRuns+priorGames*leagueRunsPerGame)/(roadGames+priorGames);
+  return clamp(homeEnvironment/roadEnvironment,0.9,1.1);
+}
+
 export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4, opposingOdds?: number) {
   const rawImpliedProbability = impliedProbability(americanOdds);
   if (rawImpliedProbability == null) return null;

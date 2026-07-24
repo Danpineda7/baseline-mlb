@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { closingLineValue, countOverProbability, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -71,4 +71,12 @@ test("measures CLV from two-sided no-vig closing probability",()=>{
   assert.ok(clv);
   assert.ok(clv.value>0);
   assert.equal(clv.value.toFixed(4),(clv.closingProbability-0.5).toFixed(4));
+});
+
+test("park factor regresses small samples and remains bounded",()=>{
+  const small=empiricalParkFactor(24,2,18,2,9);
+  const large=empiricalParkFactor(300,25,225,25,9);
+  assert.ok(Math.abs(small-1)<Math.abs(large-1));
+  assert.equal(empiricalParkFactor(1000,10,0,10,9),1.1);
+  assert.equal(empiricalParkFactor(0,10,1000,10,9),0.9);
 });
