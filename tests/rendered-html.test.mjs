@@ -17,7 +17,7 @@ test("renders the Baseline analysis cockpit", async () => {
   assert.match(html, /Official schedule/i);
   assert.match(html, /Model leans/);
   assert.match(html, /Source health/i);
-  assert.match(html, /UNCALIBRATED/);
+  assert.match(html, /CALIBRATION PENDING/);
   assert.match(html, /No wager qualifies/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/);
 });

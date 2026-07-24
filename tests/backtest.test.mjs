@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { walkForwardBacktest } from "../lib/backtest.ts";
+import { applyProbabilityCalibration, fitProbabilityCalibration, walkForwardBacktest } from "../lib/backtest.ts";
 
 function game(id, day, awayId, homeId, awayScore, homeScore) { return {id,playedAt:`2026-04-${String(day).padStart(2,"0")}T18:00:00Z`,awayId,homeId,awayScore,homeScore}; }
 
@@ -20,4 +20,19 @@ test("future score changes cannot alter an earlier prediction", () => {
   assert.equal(original.predictions[0].probability,changed.predictions[0].probability);
   assert.equal(original.predictions[1].probability,changed.predictions[1].probability);
   assert.equal(original.predictions[2].probability,changed.predictions[2].probability);
+});
+
+test("Platt calibration is monotonic and refuses small samples",()=>{
+  const rows=Array.from({length:240},(_,index)=>({probability:0.3+index/600,outcome:index%3===0?1:0}));
+  assert.equal(fitProbabilityCalibration(rows.slice(0,199)),null);
+  const model=fitProbabilityCalibration(rows);
+  assert.ok(model);
+  let previous=0;
+  for(let probability=0.05;probability<0.96;probability+=0.01){const calibrated=applyProbabilityCalibration(probability,model);assert.ok(calibrated>=previous-1e-12);previous=calibrated;}
+});
+
+test("calibrated predictions never learn from a future result",()=>{
+  const games=Array.from({length:230},(_,index)=>({id:index+1,playedAt:`2026-${String(index+1).padStart(4,"0")}`,awayId:1,homeId:2,awayScore:index%2,homeScore:(index+1)%2}));
+  const original=walkForwardBacktest(games,2),changed=walkForwardBacktest([...games.slice(0,-1),{...games.at(-1),homeScore:20}],2);
+  assert.equal(original.predictions.at(-2).calibratedProbability,changed.predictions.at(-2).calibratedProbability);
 });
