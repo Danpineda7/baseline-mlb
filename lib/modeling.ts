@@ -8,6 +8,22 @@ function poissonPmf(k: number, lambda: number) {
   return Math.exp(-lambda) * Math.pow(lambda, k) / factorial;
 }
 
+export function projectPeriod(awayRuns: number, homeRuns: number) {
+  let awayWin=0,homeWin=0,tie=0;
+  for(let away=0;away<=14;away+=1) for(let home=0;home<=14;home+=1){
+    const mass=poissonPmf(away,awayRuns)*poissonPmf(home,homeRuns);
+    if(away>home)awayWin+=mass; else if(home>away)homeWin+=mass; else tie+=mass;
+  }
+  const total=awayWin+homeWin+tie;
+  return {awayWin:awayWin/total,homeWin:homeWin/total,tie:tie/total,awayNoPush:awayWin/(awayWin+homeWin),homeNoPush:homeWin/(awayWin+homeWin)};
+}
+
+export function firstInningMarkets(awayRuns:number,homeRuns:number,firstInningShare:number){
+  const expectedRuns=(awayRuns+homeRuns)*firstInningShare;
+  const nrfi=Math.exp(-expectedRuns);
+  return {expectedRuns,nrfi,yrfi:1-nrfi};
+}
+
 export function fairAmerican(probability: number) {
   const p = clamp(probability, 0.01, 0.99);
   const price = p >= 0.5 ? -(p / (1 - p)) * 100 : ((1 - p) / p) * 100;

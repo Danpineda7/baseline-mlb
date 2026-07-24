@@ -106,6 +106,9 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .market-tabs { display:flex; gap:4px; margin:-3px 0 12px; padding-bottom:10px; border-bottom:1px solid #e1e6ee; }
 .market-tabs button { flex:1; border:1px solid #d7dee8; border-radius:5px; background:#fff; color:#687386; padding:6px 4px; cursor:pointer; font-size:8px; font-weight:800; }
 .market-tabs button.active { border-color:var(--mlb-navy); background:var(--mlb-navy); color:#fff; }
+.market-tabs.multi { display:grid; grid-template-columns:repeat(6,1fr); }
+.micro-market { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 0; }
+.micro-market span { padding:4px 6px; border-radius:4px; background:#eef2f7; color:#667287; font-family:var(--font-mono); font-size:8px; }
 .starter-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 14px; }
 .starter-grid>div { display:grid; gap:3px; padding:9px; border:1px solid #e1e6ee; border-radius:7px; background:#fafbfd; }
 .starter-grid small { color:#7c8798; font-size:8px; font-weight:850; letter-spacing:.06em; }
@@ -123,6 +126,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .performance-foot { display:flex; justify-content:space-between; gap:16px; padding:10px 22px; border-top:1px solid #edf0f4; background:#fafbfd; color:#7d8898; font-size:9px; }
 @media(max-width:520px){.decision{grid-template-columns:1fr 1fr}.odds-inputs,.odds-inputs.three{grid-template-columns:1fr}}
 @media(max-width:620px){.calibration-row{grid-template-columns:52px 1fr 65px}.calibration-row>small{display:none}.performance-foot{display:grid}}
+@media(max-width:420px){.market-tabs.multi{grid-template-columns:repeat(3,1fr)}}
 .game-status { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; }
 .game-status span { color:#6f7a8b; background:#f0f3f7; border-radius:5px; padding:4px 6px; font-size:8px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }
 .game-status span.live { color:#fff; background:var(--mlb-red); }

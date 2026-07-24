@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fairAmerican, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectScore, starterRunAdjustment } from "../lib/modeling.ts";
+import { fairAmerican, firstInningMarkets, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
   assert.equal(impliedProbability(150)?.toFixed(4), "0.4000");
   assert.equal(impliedProbability(50), null);
   assert.equal(fairAmerican(0.6), "-150");
+});
+
+test("first-five push and NRFI/YRFI markets normalize",()=>{
+  const f5=projectPeriod(2.4,2.1);
+  assert.ok(Math.abs(f5.awayWin+f5.homeWin+f5.tie-1)<1e-8);
+  assert.ok(Math.abs(f5.awayNoPush+f5.homeNoPush-1)<1e-8);
+  const first=firstInningMarkets(4.2,4.6,0.115);
+  assert.ok(Math.abs(first.nrfi+first.yrfi-1)<1e-12);
+  assert.ok(first.nrfi>0&&first.nrfi<1);
 });
 
 test("starter adjustment regresses small samples and understands baseball innings", () => {
