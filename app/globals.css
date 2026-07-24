@@ -34,3 +34,38 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 @media(max-width:780px){.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;transform:translateX(-100%);transition:.2s;width:224px}.sidebar.open{transform:none}.workspace{padding:0 16px 22px}.topbar{height:86px}.menu{display:block;border:0;background:none;font-size:20px}.topbar>div:first-of-type{margin-right:auto;margin-left:12px}.top-actions .ghost-button{display:none}.notice p{display:block;margin:2px 0 0}.section-head{align-items:flex-start;flex-direction:column}.segmented{width:100%}.table-header{display:none}.table-row{grid-template-columns:1.8fr .8fr .55fr}.table-row>span:nth-child(2),.table-row>span:nth-child(4){display:none}.metric-row,.lower-grid{grid-template-columns:1fr 1fr}.explain-card{display:block}.price-grid{display:grid}.source-list>div{grid-template-columns:31px 1fr 50px}.source-list time{display:none}}
 @media(max-width:520px){.top-actions .primary-button{font-size:0;padding:10px}.top-actions .primary-button span{font-size:16px;margin:0}.metric-row,.lower-grid{grid-template-columns:1fr}.table-row{padding:11px 13px}.section-head{padding-left:15px;padding-right:15px}.table-foot{padding:12px 14px}.table-foot span{display:none}.source-list>div,.check-list>div{padding-left:15px;padding-right:15px}footer{display:grid;gap:5px}.explain-card{padding:16px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+/* MLB-inspired brand palette — layout and semantic status colors stay unchanged. */
+:root { --ink:#13233f; --muted:#687386; --line:#dce2eb; --paper:#f4f6f9; --lime:#d50032; --mlb-navy:#002d72; --mlb-red:#d50032; --mlb-blue:#0057b8; }
+.sidebar { background:#001f4e; color:#e6edf7; }
+.logo-mark { color:#fff; background:var(--mlb-red); }
+.nav-link { color:#aab9cf; }
+.nav-link:hover,.nav-link.active { background:#0c3265; }
+.system-dot { color:#aab9cf; }
+.user-chip { border-color:#244b7c; background:#0a2b5a; }
+.user-chip span { background:#244b7c; }
+.user-chip small { color:#c4d0df; }
+.ghost-button { border-color:#d7dde7; }
+.primary-button,.detail-button { background:var(--mlb-navy); border-color:var(--mlb-navy); }
+.primary-button span,.detail-button span { color:#fff; }
+.segmented { border-color:#dbe1e9; background:#f5f7fa; }
+.segmented button { color:#748093; }
+.segmented button.active { color:var(--mlb-navy); box-shadow:0 1px 4px #13233f18; }
+.pick-table { border-color:#edf0f4; }
+.table-row { border-color:#edf0f4; }
+.table-row:not(.table-header):hover,.table-row.selected { background:#f3f7fd; }
+.table-row.selected { box-shadow:inset 3px 0 var(--mlb-red); }
+.table-header { color:#7c8798; background:#fafbfd; }
+.selection small { color:#7c8798; }
+.team-badge.navy { background:var(--mlb-navy); }
+.team-badge.red { background:var(--mlb-red); }
+.team-badge.blue { background:var(--mlb-blue); }
+.market-pill { color:#647083; background:#f0f3f7; }
+.table-foot { color:#788396; }
+.table-foot button,.text-button { color:var(--mlb-blue); }
+.confidence { background:conic-gradient(var(--mlb-blue) var(--score),#e8ecf2 0); }
+.price-grid { background:#f5f7fa; }
+.price-grid>div { border-color:#dfe4ec; }
+.driver-list>div>span { background:#e8f0fb; color:var(--mlb-blue); }
+.driver-list p { color:#6e7889; }
+.source-icon { background:#e9eff8; color:var(--mlb-navy); }
