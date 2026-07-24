@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   const standingsUrl = new URL("https://statsapi.mlb.com/api/v1/standings");
   standingsUrl.searchParams.set("leagueId", "103,104");
   standingsUrl.searchParams.set("season", String(season));
+  standingsUrl.searchParams.set("date", date);
   standingsUrl.searchParams.set("hydrate", "team");
 
   try {

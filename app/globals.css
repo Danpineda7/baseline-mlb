@@ -102,7 +102,18 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .decision.qualifies { color:#145b42; background:#e7f5ed; border:1px solid #c8e4d5; }
 .decision.pass { color:#794854; background:#fff0f3; border:1px solid #f0d1d8; }
 .input-help { margin:4px 0 0; color:#7c8798; font-size:9px; }
+.performance-panel { margin:0 0 18px; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 2px 8px #243b3210; overflow:hidden; }
+.calibration-grid { border-top:1px solid #edf0f4; padding:8px 22px; }
+.calibration-row { display:grid; grid-template-columns:62px minmax(120px,1fr) 72px 42px; gap:12px; align-items:center; min-height:34px; font-size:9px; color:#707c8d; }
+.calibration-row>span { font-family:var(--font-mono); font-weight:700; }
+.calibration-row>strong { color:var(--ink); font-family:var(--font-mono); font-size:9px; }
+.calibration-row>small { text-align:right; }
+.calibration-track { position:relative; height:7px; border-radius:10px; background:#edf1f6; }
+.calibration-track i { display:block; height:100%; border-radius:10px; background:#8db3df; }
+.calibration-track b { position:absolute; top:-3px; width:3px; height:13px; border-radius:2px; background:var(--mlb-red); transform:translateX(-1px); }
+.performance-foot { display:flex; justify-content:space-between; gap:16px; padding:10px 22px; border-top:1px solid #edf0f4; background:#fafbfd; color:#7d8898; font-size:9px; }
 @media(max-width:520px){.decision{grid-template-columns:1fr 1fr}.odds-inputs{grid-template-columns:1fr}}
+@media(max-width:620px){.calibration-row{grid-template-columns:52px 1fr 65px}.calibration-row>small{display:none}.performance-foot{display:grid}}
 .game-status { display:flex; align-items:center; justify-content:space-between; margin-bottom:11px; }
 .game-status span { color:#6f7a8b; background:#f0f3f7; border-radius:5px; padding:4px 6px; font-size:8px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }
 .game-status span.live { color:#fff; background:var(--mlb-red); }
