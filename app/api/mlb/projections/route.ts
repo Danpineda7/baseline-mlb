@@ -1,4 +1,4 @@
-import { clamp, fairAmerican, firstInningMarkets, inningsToDecimal, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "@/lib/modeling";
+import { clamp, fairAmerican, firstInningMarkets, hitterHitProjection, inningsToDecimal, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "@/lib/modeling";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -17,10 +17,13 @@ type SchedulePayload = {
       away?: { team?: { id?: number; name?: string; abbreviation?: string }; probablePitcher?: { id?:number; fullName?: string } };
       home?: { team?: { id?: number; name?: string; abbreviation?: string }; probablePitcher?: { id?:number; fullName?: string } };
     };
+    lineups?:{awayPlayers?:Array<{id?:number;fullName?:string}>;homePlayers?:Array<{id?:number;fullName?:string}>};
   }> }>;
 };
 type PitchingStat = { era?: string; inningsPitched?: string; gamesStarted?: number; strikeOuts?:number };
 type PeoplePayload = { people?: Array<{ id?: number; stats?: Array<{ splits?: Array<{ stat?: PitchingStat }> }> }> };
+type HittingStat={gamesPlayed?:number;hits?:number;atBats?:number;plateAppearances?:number;avg?:string;ops?:string};
+type HitterPayload={people?:Array<{id?:number;fullName?:string;stats?:Array<{splits?:Array<{stat?:HittingStat}>}>}>};
 type ContextPayload={dates?:Array<{games?:Array<{status?:{abstractGameState?:string};teams?:{away?:{score?:number};home?:{score?:number}};linescore?:{innings?:Array<{num?:number;away?:{runs?:number};home?:{runs?:number}}>} }>}>};
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,7 +37,7 @@ export async function GET(request: Request) {
   const scheduleUrl = new URL("https://statsapi.mlb.com/api/v1/schedule");
   scheduleUrl.searchParams.set("sportId", "1");
   scheduleUrl.searchParams.set("date", date);
-  scheduleUrl.searchParams.set("hydrate", "probablePitcher,team,venue");
+  scheduleUrl.searchParams.set("hydrate", "probablePitcher,team,venue,lineups");
   const standingsUrl = new URL("https://statsapi.mlb.com/api/v1/standings");
   standingsUrl.searchParams.set("leagueId", "103,104");
   standingsUrl.searchParams.set("season", String(season));
@@ -56,6 +59,7 @@ export async function GET(request: Request) {
     if(contextResponse.ok){const context=await contextResponse.json() as ContextPayload;let allRuns=0,firstRuns=0,firstFiveRuns=0;for(const game of (context.dates??[]).flatMap(day=>day.games??[])){if(game.status?.abstractGameState!=="Final")continue;const innings=game.linescore?.innings??[];const total=(game.teams?.away?.score??0)+(game.teams?.home?.score??0);if(!innings.length||total<=0)continue;allRuns+=total;firstRuns+=(innings[0]?.away?.runs??0)+(innings[0]?.home?.runs??0);firstFiveRuns+=innings.filter(inning=>(inning.num??0)<=5).reduce((sum,inning)=>sum+(inning.away?.runs??0)+(inning.home?.runs??0),0);contextGames+=1;}if(allRuns>0){firstInningShare=clamp(firstRuns/allRuns,0.08,0.16);firstFiveShare=clamp(firstFiveRuns/allRuns,0.45,0.68);}}
     const scheduledGames=(schedule.dates ?? []).flatMap((day) => day.games ?? []);
     const pitcherIds=[...new Set(scheduledGames.flatMap(game=>[game.teams?.away?.probablePitcher?.id,game.teams?.home?.probablePitcher?.id]).filter((id):id is number=>Boolean(id)))];
+    const hitterIds=[...new Set(scheduledGames.flatMap(game=>[...(game.lineups?.awayPlayers??[]),...(game.lineups?.homePlayers??[])]).map(player=>player.id).filter((id):id is number=>Boolean(id)))];
     const pitcherStats=new Map<number,{era:number;innings:number;gamesStarted:number;strikeOuts:number;expectedStrikeouts:number|null}>();
     if(pitcherIds.length){
       const peopleUrl=new URL("https://statsapi.mlb.com/api/v1/people");
@@ -63,6 +67,8 @@ export async function GET(request: Request) {
       peopleUrl.searchParams.set("hydrate",`stats(group=[pitching],type=[season],season=${season})`);
       try { const peopleResponse=await fetch(peopleUrl,{headers:{accept:"application/json"}}); if(peopleResponse.ok){const people=await peopleResponse.json() as PeoplePayload; for(const person of people.people??[]){const stat=person.stats?.[0]?.splits?.[0]?.stat;const era=Number(stat?.era),gamesStarted=stat?.gamesStarted??0,strikeOuts=stat?.strikeOuts??0;if(person.id&&Number.isFinite(era))pitcherStats.set(person.id,{era,innings:inningsToDecimal(stat?.inningsPitched),gamesStarted,strikeOuts,expectedStrikeouts:strikeoutExpectation(strikeOuts,gamesStarted)});}} } catch { /* Team-only fallback remains valid and is disclosed. */ }
     }
+    const hitterStats=new Map<number,{gamesPlayed:number;hits:number;atBats:number;plateAppearances:number;avg:string;ops:string;projection:ReturnType<typeof hitterHitProjection>}>();
+    if(hitterIds.length){const hitterUrl=new URL("https://statsapi.mlb.com/api/v1/people");hitterUrl.searchParams.set("personIds",hitterIds.join(","));hitterUrl.searchParams.set("hydrate",`stats(group=[hitting],type=[season],season=${season})`);try{const hitterResponse=await fetch(hitterUrl,{headers:{accept:"application/json"}});if(hitterResponse.ok){const hitters=await hitterResponse.json() as HitterPayload;for(const person of hitters.people??[]){const stat=person.stats?.[0]?.splits?.[0]?.stat;if(!person.id||!stat)continue;const gamesPlayed=stat.gamesPlayed??0,hits=stat.hits??0,atBats=stat.atBats??0,plateAppearances=stat.plateAppearances??0;hitterStats.set(person.id,{gamesPlayed,hits,atBats,plateAppearances,avg:stat.avg??"—",ops:stat.ops??"—",projection:hitterHitProjection(hits,atBats,plateAppearances,gamesPlayed)});}}}catch{/* Confirmed lineup remains visible without a prop projection. */}}
     const records = (standings.records ?? []).flatMap((record) => record.teamRecords ?? []).filter((record) => (record.gamesPlayed ?? 0) > 0);
     const byTeam = new Map(records.map((record) => [record.team?.id ?? 0, record]));
     const leagueRuns = records.reduce((sum, record) => sum + (record.runsScored ?? 0), 0);
@@ -96,6 +102,7 @@ export async function GET(request: Request) {
       const uncertainty = clamp(42 + missingTeams * 25 + (season === new Date().getUTCFullYear() ? 0 : 8), 35, 95);
       const awayName = game.teams?.away?.team?.name ?? "Away TBD";
       const homeName = game.teams?.home?.team?.name ?? "Home TBD";
+      const lineup=(players:Array<{id?:number;fullName?:string}>)=>players.slice(0,9).map((player,index)=>{const stats=hitterStats.get(player.id??0),projection=stats?.projection;return{id:player.id??0,name:player.fullName??"Unknown hitter",battingOrder:index+1,confirmed:true,avg:stats?.avg??null,ops:stats?.ops??null,expectedHits:projection?Number(projection.expectedHits.toFixed(3)):null,onePlusHitProbability:projection?Number(projection.onePlusProbability.toFixed(4)):null,fairPrice:projection?fairAmerican(projection.onePlusProbability):null};});
       return {
         id: game.gamePk ?? 0,
         startsAt: game.gameDate ?? null,
@@ -107,6 +114,7 @@ export async function GET(request: Request) {
         total: { line: 8.5, expectedRuns: Number((awayRuns + homeRuns).toFixed(2)), overProbability: Number(distribution.over.toFixed(4)), underProbability: Number(distribution.under.toFixed(4)), overFairPrice: fairAmerican(distribution.over), underFairPrice: fairAmerican(distribution.under) },
         firstFive:{expectedRuns:Number(((awayRuns+homeRuns)*firstFiveShare).toFixed(2)),awayWinProbability:Number(firstFive.awayNoPush.toFixed(4)),homeWinProbability:Number(firstFive.homeNoPush.toFixed(4)),pushProbability:Number(firstFive.tie.toFixed(4)),awayFairPrice:fairAmerican(firstFive.awayNoPush),homeFairPrice:fairAmerican(firstFive.homeNoPush)},
         firstInning:{expectedRuns:Number(firstInning.expectedRuns.toFixed(2)),nrfiProbability:Number(firstInning.nrfi.toFixed(4)),yrfiProbability:Number(firstInning.yrfi.toFixed(4)),nrfiFairPrice:fairAmerican(firstInning.nrfi),yrfiFairPrice:fairAmerican(firstInning.yrfi)},
+        lineups:{away:lineup(game.lineups?.awayPlayers??[]),home:lineup(game.lineups?.homePlayers??[]),confirmed:Boolean(game.lineups?.awayPlayers?.length&&game.lineups?.homePlayers?.length)},
         uncertainty,
         recommendation: { status: "NO_BET", reason: "A verified sportsbook price is required to calculate edge." },
         drivers: [
@@ -120,7 +128,7 @@ export async function GET(request: Request) {
 
     return Response.json({
       date, season, games, count: games.length, retrievedAt: new Date().toISOString(),
-      model: { name: "Multi-market Baseline v0.4", calibrated: false, inputs: ["season runs scored", "season runs allowed", "probable-starter ERA regressed by innings", "starter strikeouts per start regressed by starts", "empirical first-inning and first-five run shares", "home-field adjustment", "Poisson distributions"], omissions: ["confirmed lineups", "opponent strikeout tendency", "bullpen availability", "weather", "park factors", "market odds"],inningContext:{games:contextGames,firstInningShare:Number(firstInningShare.toFixed(4)),firstFiveShare:Number(firstFiveShare.toFixed(4))} },
+      model: { name: "Multi-market Baseline v0.5", calibrated: false, inputs: ["season runs scored", "season runs allowed", "confirmed batting orders", "hitter hit rate regressed by at-bats", "probable-starter ERA regressed by innings", "starter strikeouts per start regressed by starts", "empirical first-inning and first-five run shares", "home-field adjustment", "Poisson distributions"], omissions: ["pitcher-batter matchups", "opponent strikeout tendency", "bullpen availability", "weather", "park factors", "market odds"],inningContext:{games:contextGames,firstInningShare:Number(firstInningShare.toFixed(4)),firstFiveShare:Number(firstFiveShare.toFixed(4))} },
       source: "MLB Stats API",
     }, { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=180" } });
   } catch (error) {

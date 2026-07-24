@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countOverProbability, fairAmerican, firstInningMarkets, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { countOverProbability, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
   assert.equal(impliedProbability(150)?.toFixed(4), "0.4000");
   assert.equal(impliedProbability(50), null);
   assert.equal(fairAmerican(0.6), "-150");
+});
+
+test("hitter one-plus hit model regresses rate and returns valid probability",()=>{
+  const projection=hitterHitProjection(75,250,280,70);
+  assert.ok(projection!=null);
+  assert.ok(projection.hitRate>0.245&&projection.hitRate<0.3);
+  assert.ok(projection.onePlusProbability>0&&projection.onePlusProbability<1);
+  assert.equal(hitterHitProjection(0,0,0,0),null);
 });
 
 test("strikeout prop regresses workload and prices count lines",()=>{

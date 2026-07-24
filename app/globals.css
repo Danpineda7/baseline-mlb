@@ -107,9 +107,11 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .market-tabs button { flex:1; border:1px solid #d7dee8; border-radius:5px; background:#fff; color:#687386; padding:6px 4px; cursor:pointer; font-size:8px; font-weight:800; }
 .market-tabs button.active { border-color:var(--mlb-navy); background:var(--mlb-navy); color:#fff; }
 .market-tabs.multi { display:grid; grid-template-columns:repeat(6,1fr); }
-.market-tabs.multi.props { grid-template-columns:repeat(8,1fr); }
+.market-tabs.multi.props { grid-template-columns:repeat(9,1fr); }
 .prop-line { display:flex; justify-content:space-between; align-items:center; margin:9px 0 0; color:#667287; font-size:9px; font-weight:750; }
 .prop-line input { width:78px; border:1px solid #cfd7e3; border-radius:6px; padding:6px; color:var(--ink); background:#fff; font-family:var(--font-mono); font-weight:750; }
+.hitter-select { display:grid; gap:5px; margin:9px 0 0; color:#667287; font-size:9px; font-weight:750; }
+.hitter-select select { width:100%; border:1px solid #cfd7e3; border-radius:6px; padding:7px; color:var(--ink); background:#fff; font-size:10px; }
 .micro-market { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 0; }
 .micro-market span { padding:4px 6px; border-radius:4px; background:#eef2f7; color:#667287; font-family:var(--font-mono); font-size:8px; }
 .starter-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 14px; }

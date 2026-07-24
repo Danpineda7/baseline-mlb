@@ -38,6 +38,15 @@ export function countOverProbability(expectedCount:number,line:number){
   return clamp(1-underOrEqual,0,1);
 }
 
+export function hitterHitProjection(hits:number,atBats:number,plateAppearances:number,gamesPlayed:number,leagueAverage=0.245){
+  if(atBats<=0||gamesPlayed<=0||hits<0)return null;
+  const reliability=atBats/(atBats+100);
+  const hitRate=clamp(reliability*(hits/atBats)+(1-reliability)*leagueAverage,0.12,0.4);
+  const expectedAtBats=clamp((plateAppearances/gamesPlayed)*0.91,2.8,4.6);
+  const expectedHits=hitRate*expectedAtBats;
+  return {hitRate,expectedAtBats,expectedHits,onePlusProbability:1-Math.exp(-expectedHits)};
+}
+
 export function fairAmerican(probability: number) {
   const p = clamp(probability, 0.01, 0.99);
   const price = p >= 0.5 ? -(p / (1 - p)) * 100 : ((1 - p) / p) * 100;
