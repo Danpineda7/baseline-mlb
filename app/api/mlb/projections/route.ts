@@ -1,4 +1,4 @@
-import { clamp, fairAmerican, firstInningMarkets, inningsToDecimal, projectPeriod, projectScore, starterRunAdjustment } from "@/lib/modeling";
+import { clamp, fairAmerican, firstInningMarkets, inningsToDecimal, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "@/lib/modeling";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -19,7 +19,7 @@ type SchedulePayload = {
     };
   }> }>;
 };
-type PitchingStat = { era?: string; inningsPitched?: string; gamesStarted?: number };
+type PitchingStat = { era?: string; inningsPitched?: string; gamesStarted?: number; strikeOuts?:number };
 type PeoplePayload = { people?: Array<{ id?: number; stats?: Array<{ splits?: Array<{ stat?: PitchingStat }> }> }> };
 type ContextPayload={dates?:Array<{games?:Array<{status?:{abstractGameState?:string};teams?:{away?:{score?:number};home?:{score?:number}};linescore?:{innings?:Array<{num?:number;away?:{runs?:number};home?:{runs?:number}}>} }>}>};
 
@@ -56,12 +56,12 @@ export async function GET(request: Request) {
     if(contextResponse.ok){const context=await contextResponse.json() as ContextPayload;let allRuns=0,firstRuns=0,firstFiveRuns=0;for(const game of (context.dates??[]).flatMap(day=>day.games??[])){if(game.status?.abstractGameState!=="Final")continue;const innings=game.linescore?.innings??[];const total=(game.teams?.away?.score??0)+(game.teams?.home?.score??0);if(!innings.length||total<=0)continue;allRuns+=total;firstRuns+=(innings[0]?.away?.runs??0)+(innings[0]?.home?.runs??0);firstFiveRuns+=innings.filter(inning=>(inning.num??0)<=5).reduce((sum,inning)=>sum+(inning.away?.runs??0)+(inning.home?.runs??0),0);contextGames+=1;}if(allRuns>0){firstInningShare=clamp(firstRuns/allRuns,0.08,0.16);firstFiveShare=clamp(firstFiveRuns/allRuns,0.45,0.68);}}
     const scheduledGames=(schedule.dates ?? []).flatMap((day) => day.games ?? []);
     const pitcherIds=[...new Set(scheduledGames.flatMap(game=>[game.teams?.away?.probablePitcher?.id,game.teams?.home?.probablePitcher?.id]).filter((id):id is number=>Boolean(id)))];
-    const pitcherStats=new Map<number,{era:number;innings:number;gamesStarted:number}>();
+    const pitcherStats=new Map<number,{era:number;innings:number;gamesStarted:number;strikeOuts:number;expectedStrikeouts:number|null}>();
     if(pitcherIds.length){
       const peopleUrl=new URL("https://statsapi.mlb.com/api/v1/people");
       peopleUrl.searchParams.set("personIds",pitcherIds.join(","));
       peopleUrl.searchParams.set("hydrate",`stats(group=[pitching],type=[season],season=${season})`);
-      try { const peopleResponse=await fetch(peopleUrl,{headers:{accept:"application/json"}}); if(peopleResponse.ok){const people=await peopleResponse.json() as PeoplePayload; for(const person of people.people??[]){const stat=person.stats?.[0]?.splits?.[0]?.stat;const era=Number(stat?.era);if(person.id&&Number.isFinite(era))pitcherStats.set(person.id,{era,innings:inningsToDecimal(stat?.inningsPitched),gamesStarted:stat?.gamesStarted??0});}} } catch { /* Team-only fallback remains valid and is disclosed. */ }
+      try { const peopleResponse=await fetch(peopleUrl,{headers:{accept:"application/json"}}); if(peopleResponse.ok){const people=await peopleResponse.json() as PeoplePayload; for(const person of people.people??[]){const stat=person.stats?.[0]?.splits?.[0]?.stat;const era=Number(stat?.era),gamesStarted=stat?.gamesStarted??0,strikeOuts=stat?.strikeOuts??0;if(person.id&&Number.isFinite(era))pitcherStats.set(person.id,{era,innings:inningsToDecimal(stat?.inningsPitched),gamesStarted,strikeOuts,expectedStrikeouts:strikeoutExpectation(strikeOuts,gamesStarted)});}} } catch { /* Team-only fallback remains valid and is disclosed. */ }
     }
     const records = (standings.records ?? []).flatMap((record) => record.teamRecords ?? []).filter((record) => (record.gamesPlayed ?? 0) > 0);
     const byTeam = new Map(records.map((record) => [record.team?.id ?? 0, record]));
@@ -102,8 +102,8 @@ export async function GET(request: Request) {
         status: game.status?.detailedState ?? "Unknown",
         state: game.status?.abstractGameState ?? "Preview",
         venue: game.venue?.name ?? "Venue TBD",
-        away: { id: awayId, name: awayName, abbreviation: game.teams?.away?.team?.abbreviation ?? "AWY", probablePitcher: game.teams?.away?.probablePitcher?.fullName ?? null, starter:awayStarter?{era:awayStarter.era,innings:Number(awayStarter.innings.toFixed(1)),gamesStarted:awayStarter.gamesStarted,runAdjustment:Number(awayStarterAdjustment.toFixed(2))}:null, expectedRuns: Number(awayRuns.toFixed(2)), winProbability: Number(distribution.awayWin.toFixed(4)), fairPrice: fairAmerican(distribution.awayWin) },
-        home: { id: homeId, name: homeName, abbreviation: game.teams?.home?.team?.abbreviation ?? "HME", probablePitcher: game.teams?.home?.probablePitcher?.fullName ?? null, starter:homeStarter?{era:homeStarter.era,innings:Number(homeStarter.innings.toFixed(1)),gamesStarted:homeStarter.gamesStarted,runAdjustment:Number(homeStarterAdjustment.toFixed(2))}:null, expectedRuns: Number(homeRuns.toFixed(2)), winProbability: Number(distribution.homeWin.toFixed(4)), fairPrice: fairAmerican(distribution.homeWin) },
+        away: { id: awayId, name: awayName, abbreviation: game.teams?.away?.team?.abbreviation ?? "AWY", probablePitcher: game.teams?.away?.probablePitcher?.fullName ?? null, starter:awayStarter?{era:awayStarter.era,innings:Number(awayStarter.innings.toFixed(1)),gamesStarted:awayStarter.gamesStarted,runAdjustment:Number(awayStarterAdjustment.toFixed(2)),strikeOuts:awayStarter.strikeOuts,expectedStrikeouts:awayStarter.expectedStrikeouts==null?null:Number(awayStarter.expectedStrikeouts.toFixed(2))}:null, expectedRuns: Number(awayRuns.toFixed(2)), winProbability: Number(distribution.awayWin.toFixed(4)), fairPrice: fairAmerican(distribution.awayWin) },
+        home: { id: homeId, name: homeName, abbreviation: game.teams?.home?.team?.abbreviation ?? "HME", probablePitcher: game.teams?.home?.probablePitcher?.fullName ?? null, starter:homeStarter?{era:homeStarter.era,innings:Number(homeStarter.innings.toFixed(1)),gamesStarted:homeStarter.gamesStarted,runAdjustment:Number(homeStarterAdjustment.toFixed(2)),strikeOuts:homeStarter.strikeOuts,expectedStrikeouts:homeStarter.expectedStrikeouts==null?null:Number(homeStarter.expectedStrikeouts.toFixed(2))}:null, expectedRuns: Number(homeRuns.toFixed(2)), winProbability: Number(distribution.homeWin.toFixed(4)), fairPrice: fairAmerican(distribution.homeWin) },
         total: { line: 8.5, expectedRuns: Number((awayRuns + homeRuns).toFixed(2)), overProbability: Number(distribution.over.toFixed(4)), underProbability: Number(distribution.under.toFixed(4)), overFairPrice: fairAmerican(distribution.over), underFairPrice: fairAmerican(distribution.under) },
         firstFive:{expectedRuns:Number(((awayRuns+homeRuns)*firstFiveShare).toFixed(2)),awayWinProbability:Number(firstFive.awayNoPush.toFixed(4)),homeWinProbability:Number(firstFive.homeNoPush.toFixed(4)),pushProbability:Number(firstFive.tie.toFixed(4)),awayFairPrice:fairAmerican(firstFive.awayNoPush),homeFairPrice:fairAmerican(firstFive.homeNoPush)},
         firstInning:{expectedRuns:Number(firstInning.expectedRuns.toFixed(2)),nrfiProbability:Number(firstInning.nrfi.toFixed(4)),yrfiProbability:Number(firstInning.yrfi.toFixed(4)),nrfiFairPrice:fairAmerican(firstInning.nrfi),yrfiFairPrice:fairAmerican(firstInning.yrfi)},
@@ -120,7 +120,7 @@ export async function GET(request: Request) {
 
     return Response.json({
       date, season, games, count: games.length, retrievedAt: new Date().toISOString(),
-      model: { name: "Multi-market Run Baseline v0.3", calibrated: false, inputs: ["season runs scored", "season runs allowed", "probable-starter ERA regressed by innings", "empirical first-inning and first-five run shares", "home-field adjustment", "Poisson score distribution"], omissions: ["confirmed lineups", "bullpen availability", "weather", "park factors", "market odds"],inningContext:{games:contextGames,firstInningShare:Number(firstInningShare.toFixed(4)),firstFiveShare:Number(firstFiveShare.toFixed(4))} },
+      model: { name: "Multi-market Baseline v0.4", calibrated: false, inputs: ["season runs scored", "season runs allowed", "probable-starter ERA regressed by innings", "starter strikeouts per start regressed by starts", "empirical first-inning and first-five run shares", "home-field adjustment", "Poisson distributions"], omissions: ["confirmed lineups", "opponent strikeout tendency", "bullpen availability", "weather", "park factors", "market odds"],inningContext:{games:contextGames,firstInningShare:Number(firstInningShare.toFixed(4)),firstFiveShare:Number(firstFiveShare.toFixed(4))} },
       source: "MLB Stats API",
     }, { headers: { "cache-control": "public, max-age=60, stale-while-revalidate=180" } });
   } catch (error) {

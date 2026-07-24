@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fairAmerican, firstInningMarkets, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment } from "../lib/modeling.ts";
+import { countOverProbability, fairAmerican, firstInningMarkets, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
   assert.equal(impliedProbability(150)?.toFixed(4), "0.4000");
   assert.equal(impliedProbability(50), null);
   assert.equal(fairAmerican(0.6), "-150");
+});
+
+test("strikeout prop regresses workload and prices count lines",()=>{
+  const small=strikeoutExpectation(14,2);
+  const established=strikeoutExpectation(140,20);
+  assert.ok(small!=null&&established!=null&&Math.abs(small-5.2)<Math.abs(established-5.2));
+  const over=countOverProbability(6,5.5);
+  assert.ok(over!=null&&over>0&&over<1);
+  assert.ok((countOverProbability(7,5.5)??0)>over);
 });
 
 test("first-five push and NRFI/YRFI markets normalize",()=>{

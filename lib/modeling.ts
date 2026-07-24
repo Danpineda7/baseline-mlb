@@ -24,6 +24,20 @@ export function firstInningMarkets(awayRuns:number,homeRuns:number,firstInningSh
   return {expectedRuns,nrfi,yrfi:1-nrfi};
 }
 
+export function strikeoutExpectation(strikeouts:number,gamesStarted:number,leaguePerStart=5.2){
+  if(gamesStarted<=0||strikeouts<0)return null;
+  const reliability=gamesStarted/(gamesStarted+5);
+  return clamp(reliability*(strikeouts/gamesStarted)+(1-reliability)*leaguePerStart,1.5,10.5);
+}
+
+export function countOverProbability(expectedCount:number,line:number){
+  if(!Number.isFinite(expectedCount)||expectedCount<=0||!Number.isFinite(line)||line<0)return null;
+  const minimum=Math.floor(line)+1;
+  let underOrEqual=0;
+  for(let count=0;count<minimum;count+=1)underOrEqual+=poissonPmf(count,expectedCount);
+  return clamp(1-underOrEqual,0,1);
+}
+
 export function fairAmerican(probability: number) {
   const p = clamp(probability, 0.01, 0.99);
   const price = p >= 0.5 ? -(p / (1 - p)) * 100 : ((1 - p) / p) * 100;
