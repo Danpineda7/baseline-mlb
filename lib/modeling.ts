@@ -67,6 +67,11 @@ export function noVigProbability(primaryOdds: number, opposingOdds: number) {
   return primary / (primary + opposing);
 }
 
+export function closingLineValue(openingProbability:number, closingOdds:number, closingOpposingOdds:number){
+  const closingProbability=noVigProbability(closingOdds,closingOpposingOdds);
+  return closingProbability==null?null:{closingProbability,value:closingProbability-openingProbability};
+}
+
 export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4, opposingOdds?: number) {
   const rawImpliedProbability = impliedProbability(americanOdds);
   if (rawImpliedProbability == null) return null;

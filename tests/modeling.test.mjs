@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countOverProbability, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { closingLineValue, countOverProbability, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -64,4 +64,11 @@ test("removes two-sided sportsbook vig before calculating edge", () => {
   assert.equal(decision?.vigRemoved,true);
   assert.equal(decision?.marketProbability.toFixed(4),"0.5000");
   assert.equal(decision?.edge.toFixed(4),"0.0400");
+});
+
+test("measures CLV from two-sided no-vig closing probability",()=>{
+  const clv=closingLineValue(0.5,-130,110);
+  assert.ok(clv);
+  assert.ok(clv.value>0);
+  assert.equal(clv.value.toFixed(4),(clv.closingProbability-0.5).toFixed(4));
 });
