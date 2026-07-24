@@ -15,6 +15,13 @@
       "when": 1784931840176,
       "tag": "0001_silky_flatman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784932485787,
+      "tag": "0002_nostalgic_winter_soldier",
+      "breakpoints": true
     }
   ]
 }
