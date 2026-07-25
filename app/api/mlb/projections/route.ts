@@ -2,6 +2,7 @@ import { bullpenFatigueAdjustment, clamp, empiricalParkFactor, fairAmerican, fir
 import { applyProbabilityCalibration, walkForwardBacktest, type CalibrationModel, type HistoricalGame } from "@/lib/backtest";
 import { projectionUncertainty, slateQualityScore } from "@/lib/data-quality";
 import { currentInjuredList, type InjuryTransaction } from "@/lib/availability";
+import { COMPLETED_SEASON_TTL, CURRENT_SEASON_TTL, fetchMlb } from "@/lib/mlb-fetch";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -65,11 +66,11 @@ export async function GET(request: Request) {
     const [scheduleResponse, standingsResponse, contextResponse, bullpenResponse, teamHittingResponse, transactionsResponse, priorContextResponses] = await Promise.all([
       fetch(scheduleUrl, { headers: { accept: "application/json" } }),
       fetch(standingsUrl, { headers: { accept: "application/json" } }),
-      fetch(contextUrl,{headers:{accept:"application/json"}}),
+      fetchMlb(contextUrl,CURRENT_SEASON_TTL),
       fetch(bullpenUrl,{headers:{accept:"application/json"}}),
       fetch(teamHittingUrl,{headers:{accept:"application/json"}}),
       fetch(transactionsUrl,{headers:{accept:"application/json"}}),
-      Promise.all(priorContextUrls.map(url=>fetch(url,{headers:{accept:"application/json"}}))),
+      Promise.all(priorContextUrls.map(url=>fetchMlb(url,COMPLETED_SEASON_TTL))),
     ]);
     if (!scheduleResponse.ok || !standingsResponse.ok) throw new Error("One or more MLB feeds did not respond successfully");
     const schedule = await scheduleResponse.json() as SchedulePayload;

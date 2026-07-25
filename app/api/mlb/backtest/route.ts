@@ -1,4 +1,5 @@
 import { walkForwardBacktest, type HistoricalGame } from "@/lib/backtest";
+import { COMPLETED_SEASON_TTL, CURRENT_SEASON_TTL, fetchMlb } from "@/lib/mlb-fetch";
 
 type Feed = { dates?:Array<{games?:Array<{gamePk?:number;gameDate?:string;status?:{abstractGameState?:string};teams?:{away?:{team?:{id?:number};score?:number};home?:{team?:{id?:number};score?:number}};linescore?:{innings?:Array<{num?:number;away?:{runs?:number};home?:{runs?:number}}>}}>}> };
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -11,7 +12,7 @@ export async function GET(request:Request){
   if(!DATE.test(through))return Response.json({error:"Invalid through date."},{status:400});
   const season=Number(through.slice(0,4)),seasons=[season-2,season-1,season];
   try{
-    const responses=await Promise.all(seasons.map(year=>fetch(endpoint(`${year}-03-15`,year===season?through:`${year}-10-31`),{headers:{accept:"application/json"}})));
+    const responses=await Promise.all(seasons.map(year=>fetchMlb(endpoint(`${year}-03-15`,year===season?through:`${year}-10-31`),year===season?CURRENT_SEASON_TTL:COMPLETED_SEASON_TTL)));
     const failed=responses.find(response=>!response.ok);if(failed)throw new Error(`MLB responded ${failed.status}`);
     const feeds=await Promise.all(responses.map(response=>response.json() as Promise<Feed>)),games=feeds.flatMap(historicalGames),result=walkForwardBacktest(games,10);
     return Response.json({season,seasons,through,retrievedAt:new Date().toISOString(),source:"MLB Stats API",method:{name:"Three-season, date-batched expanding-window walk-forward",minimumPriorGames:10,featureRule:"Every date uses one prior-day snapshot; team and run-environment features reset each season while calibration uses only earlier predictions",marketDataIncluded:false},gamesIngested:games.length,...result},{headers:{"cache-control":"public, max-age=1800, stale-while-revalidate=3600"}});
