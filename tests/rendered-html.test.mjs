@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {readFile} from "node:fs/promises";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -20,4 +21,9 @@ test("renders the Baseline analysis cockpit", async () => {
   assert.match(html, /CALIBRATION PENDING/);
   assert.match(html, /No wager qualifies/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/);
+});
+
+test("data-health UI lists every modeled source family",async()=>{
+  const source=await readFile(new URL("../app/dashboard.tsx",import.meta.url),"utf8");
+  for(const label of ["Bullpen workload","Opponent K rates","Hitter platoon splits","Roster statuses"])assert.match(source,new RegExp(label));
 });
