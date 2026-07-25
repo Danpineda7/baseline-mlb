@@ -104,6 +104,14 @@ test("removes two-sided sportsbook vig before calculating edge", () => {
   assert.equal(decision?.edge.toFixed(4),"0.0400");
 });
 
+test("whole-number totals price wins, losses and pushes separately",()=>{
+  const decision=priceDecision(.4,150,.4,-170,.2);
+  assert.ok(decision);
+  assert.equal(decision.modelProbability,.5);
+  assert.equal(decision.pushProbability,.2);
+  assert.equal(decision.expectedValue.toFixed(4),"0.2000");
+});
+
 test("measures CLV from two-sided no-vig closing probability",()=>{
   const clv=closingLineValue(0.5,-130,110);
   assert.ok(clv);

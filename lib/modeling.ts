@@ -93,25 +93,26 @@ export function empiricalParkFactor(homeRuns:number,homeGames:number,roadRuns:nu
   return clamp(homeEnvironment/roadEnvironment,0.9,1.1);
 }
 
-export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4, opposingOdds?: number) {
+export function priceDecision(modelProbability: number, americanOdds: number, uncertainty = 0.4, opposingOdds?: number, pushProbability=0) {
   const rawImpliedProbability = impliedProbability(americanOdds);
-  if (rawImpliedProbability == null) return null;
+  if (rawImpliedProbability == null||!Number.isFinite(modelProbability)||modelProbability<=0||!Number.isFinite(pushProbability)||pushProbability<0||modelProbability+pushProbability>=1) return null;
   const noVig = opposingOdds == null ? null : noVigProbability(americanOdds, opposingOdds);
   const marketProbability = noVig ?? rawImpliedProbability;
   const decimalOdds = americanOdds > 0 ? 1 + americanOdds / 100 : 1 + 100 / Math.abs(americanOdds);
-  const edge = modelProbability - marketProbability;
-  const expectedValue = modelProbability * (decimalOdds - 1) - (1 - modelProbability);
-  const fullKelly = expectedValue / (decimalOdds - 1);
+  const conditionalProbability=modelProbability/(1-pushProbability);
+  const edge = conditionalProbability - marketProbability;
+  const expectedValue = modelProbability * (decimalOdds - 1) - (1-modelProbability-pushProbability);
+  const fullKelly = (conditionalProbability*(decimalOdds-1)-(1-conditionalProbability))/(decimalOdds-1);
   // High uncertainty means smaller stakes; never recommend more than 0.5% of bankroll.
   const stakeFraction = clamp(fullKelly * 0.25 * (1 - uncertainty), 0, 0.005);
   const qualifies = edge >= 0.025 && expectedValue > 0.02 && uncertainty <= 0.55;
-  return { marketProbability, rawImpliedProbability, vigRemoved: noVig != null, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
+  return { marketProbability, rawImpliedProbability, vigRemoved: noVig != null, modelProbability:conditionalProbability, pushProbability, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
 }
 
-export function playablePriceThreshold(modelProbability:number,opposingOdds:number,uncertainty=0.4){
+export function playablePriceThreshold(modelProbability:number,opposingOdds:number,uncertainty=0.4,pushProbability=0){
   const candidates:number[]=[];for(let odds=-1000;odds<=-100;odds++)candidates.push(odds);for(let odds=100;odds<=1000;odds++)candidates.push(odds);
   const decimal=(odds:number)=>odds>0?1+odds/100:1+100/Math.abs(odds);
-  const qualifying=candidates.filter(odds=>priceDecision(modelProbability,odds,uncertainty,opposingOdds)?.qualifies).sort((left,right)=>decimal(left)-decimal(right));
+  const qualifying=candidates.filter(odds=>priceDecision(modelProbability,odds,uncertainty,opposingOdds,pushProbability)?.qualifies).sort((left,right)=>decimal(left)-decimal(right));
   return qualifying[0]??null;
 }
 
