@@ -30,6 +30,13 @@ export function strikeoutExpectation(strikeouts:number,gamesStarted:number,leagu
   return clamp(reliability*(strikeouts/gamesStarted)+(1-reliability)*leaguePerStart,1.5,10.5);
 }
 
+export function opponentAdjustedStrikeouts(expected:number|null,strikeouts:number,plateAppearances:number,leagueRate:number){
+  if(expected==null||expected<=0||strikeouts<0||plateAppearances<=0||leagueRate<=0)return expected;
+  const reliability=plateAppearances/(plateAppearances+600);
+  const regressedRate=reliability*(strikeouts/plateAppearances)+(1-reliability)*leagueRate;
+  return clamp(expected*clamp(regressedRate/leagueRate,0.88,1.12),1.5,11.5);
+}
+
 export function countOverProbability(expectedCount:number,line:number){
   if(!Number.isFinite(expectedCount)||expectedCount<=0||!Number.isFinite(line)||line<0)return null;
   const minimum=Math.floor(line)+1;

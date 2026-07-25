@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -24,6 +24,15 @@ test("strikeout prop regresses workload and prices count lines",()=>{
   const over=countOverProbability(6,5.5);
   assert.ok(over!=null&&over>0&&over<1);
   assert.ok((countOverProbability(7,5.5)??0)>over);
+});
+
+test("opponent strikeout adjustment is regressed and capped",()=>{
+  const neutral=opponentAdjustedStrikeouts(6,900,4000,0.225);
+  const high=opponentAdjustedStrikeouts(6,1200,4000,0.225);
+  const low=opponentAdjustedStrikeouts(6,500,4000,0.225);
+  assert.ok(neutral!=null&&high!=null&&low!=null&&high>neutral&&neutral>low);
+  assert.ok(high<=6*1.12&&low>=6*0.88);
+  assert.equal(opponentAdjustedStrikeouts(null,900,4000,0.225),null);
 });
 
 test("first-five push and NRFI/YRFI markets normalize",()=>{
