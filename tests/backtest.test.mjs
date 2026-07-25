@@ -22,6 +22,16 @@ test("future score changes cannot alter an earlier prediction", () => {
   assert.equal(original.predictions[2].probability,changed.predictions[2].probability);
 });
 
+test("same-day results cannot influence another game on that date",()=>{
+  const warmup=[game(1,1,1,2,2,4),game(2,2,1,2,3,5),game(3,3,1,2,1,4)];
+  const first={...game(4,4,1,2,0,1),playedAt:"2026-04-04T17:00:00Z"};
+  const second={...game(5,4,1,2,2,3),playedAt:"2026-04-04T23:00:00Z"};
+  const original=walkForwardBacktest([...warmup,first,second],2);
+  const changed=walkForwardBacktest([...warmup,{...first,awayScore:25,homeScore:0},second],2);
+  assert.equal(original.predictions.find(row=>row.id===5).probability,changed.predictions.find(row=>row.id===5).probability);
+  assert.equal(original.predictions.find(row=>row.id===5).expectedTotal,changed.predictions.find(row=>row.id===5).expectedTotal);
+});
+
 test("walk-forward validation reports core market families",()=>{
   const games=[];
   for(let day=1;day<=8;day++)games.push(game(day,day,1,2,day%4,3));

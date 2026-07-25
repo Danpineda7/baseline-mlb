@@ -32,34 +32,43 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
   let leagueTeamGames = 0;
   let observedInningRuns=0,observedFirstFiveRuns=0,observedRunsForShares=0;
   const sorted = [...games].sort((a,b)=>a.playedAt.localeCompare(b.playedAt)||a.id-b.id);
+  const dateGroups=new Map<string,HistoricalGame[]>();
+  for(const game of sorted){const date=game.playedAt.slice(0,10);dateGroups.set(date,[...(dateGroups.get(date)??[]),game]);}
 
-  for (const game of sorted) {
-    const away = teams.get(game.awayId) ?? { games:0, scored:0, allowed:0 };
-    const home = teams.get(game.homeId) ?? { games:0, scored:0, allowed:0 };
-    if (away.games >= minimumPriorGames && home.games >= minimumPriorGames && leagueTeamGames > 0) {
-      const leagueAverage = leagueRuns / leagueTeamGames;
-      const awayRaw = Math.sqrt((away.scored/away.games) * (home.allowed/home.games));
-      const homeRaw = Math.sqrt((home.scored/home.games) * (away.allowed/away.games));
-      const awayRuns = clamp(0.65*awayRaw + 0.35*leagueAverage - 0.08,2.2,7.2);
-      const homeRuns = clamp(0.65*homeRaw + 0.35*leagueAverage + 0.08,2.2,7.2);
-      const probability = projectScore(awayRuns,homeRuns).homeWin;
-      const scoreDistribution=projectScore(awayRuns,homeRuns,8.5);
-      const firstInningShare=observedRunsForShares>0?clamp(observedInningRuns/observedRunsForShares,0.08,0.16):0.115;
-      const firstFiveShare=observedRunsForShares>0?clamp(observedFirstFiveRuns/observedRunsForShares,0.45,0.68):0.56;
-      const f5=projectPeriod(awayRuns*firstFiveShare,homeRuns*firstFiveShare),nrfi=firstInningMarkets(awayRuns,homeRuns,firstInningShare);
-      const outcome = game.homeScore > game.awayScore ? 1 : 0;
-      const calibration=fitProbabilityCalibration(predictions.map(row=>({probability:row.probability,outcome:row.outcome})),200);
-      const calibratedProbability=calibration?applyProbabilityCalibration(probability,calibration):null;
-      const overCalibration=fitProbabilityCalibration(predictions.map(row=>({probability:row.overProbability,outcome:row.overOutcome})),200),f5Calibration=fitProbabilityCalibration(predictions.filter(row=>row.f5HomeOutcome!=null).map(row=>({probability:row.f5HomeProbability,outcome:row.f5HomeOutcome as number})),200),nrfiCalibration=fitProbabilityCalibration(predictions.filter(row=>row.nrfiOutcome!=null).map(row=>({probability:row.nrfiProbability,outcome:row.nrfiOutcome as number})),200);
-      const calibratedOverProbability=overCalibration?applyProbabilityCalibration(scoreDistribution.over,overCalibration):null,calibratedF5HomeProbability=f5Calibration?applyProbabilityCalibration(f5.homeNoPush,f5Calibration):null,calibratedNrfiProbability=nrfiCalibration?applyProbabilityCalibration(nrfi.nrfi,nrfiCalibration):null;
-      const f5Outcome=game.firstFiveAway==null||game.firstFiveHome==null||game.firstFiveAway===game.firstFiveHome?null:Number(game.firstFiveHome>game.firstFiveAway),nrfiOutcome=game.firstInningAway==null||game.firstInningHome==null?null:Number(game.firstInningAway+game.firstInningHome===0);
-      predictions.push({ id:game.id, probability, calibratedProbability, outcome, correct:(probability>=0.5)===(outcome===1), expectedTotal:awayRuns+homeRuns, actualTotal:game.awayScore+game.homeScore,overProbability:scoreDistribution.over,calibratedOverProbability,overOutcome:Number(game.awayScore+game.homeScore>8.5),f5HomeProbability:f5.homeNoPush,calibratedF5HomeProbability,f5HomeOutcome:f5Outcome,nrfiProbability:nrfi.nrfi,calibratedNrfiProbability,nrfiOutcome });
+  for (const dayGames of dateGroups.values()) {
+    const priorPredictions=[...predictions];
+    for(const game of dayGames){
+      const away = teams.get(game.awayId) ?? { games:0, scored:0, allowed:0 };
+      const home = teams.get(game.homeId) ?? { games:0, scored:0, allowed:0 };
+      if (away.games >= minimumPriorGames && home.games >= minimumPriorGames && leagueTeamGames > 0) {
+        const leagueAverage = leagueRuns / leagueTeamGames;
+        const awayRaw = Math.sqrt((away.scored/away.games) * (home.allowed/home.games));
+        const homeRaw = Math.sqrt((home.scored/home.games) * (away.allowed/away.games));
+        const awayRuns = clamp(0.65*awayRaw + 0.35*leagueAverage - 0.08,2.2,7.2);
+        const homeRuns = clamp(0.65*homeRaw + 0.35*leagueAverage + 0.08,2.2,7.2);
+        const probability = projectScore(awayRuns,homeRuns).homeWin;
+        const scoreDistribution=projectScore(awayRuns,homeRuns,8.5);
+        const firstInningShare=observedRunsForShares>0?clamp(observedInningRuns/observedRunsForShares,0.08,0.16):0.115;
+        const firstFiveShare=observedRunsForShares>0?clamp(observedFirstFiveRuns/observedRunsForShares,0.45,0.68):0.56;
+        const f5=projectPeriod(awayRuns*firstFiveShare,homeRuns*firstFiveShare),nrfi=firstInningMarkets(awayRuns,homeRuns,firstInningShare);
+        const outcome = game.homeScore > game.awayScore ? 1 : 0;
+        const calibration=fitProbabilityCalibration(priorPredictions.map(row=>({probability:row.probability,outcome:row.outcome})),200);
+        const calibratedProbability=calibration?applyProbabilityCalibration(probability,calibration):null;
+        const overCalibration=fitProbabilityCalibration(priorPredictions.map(row=>({probability:row.overProbability,outcome:row.overOutcome})),200),f5Calibration=fitProbabilityCalibration(priorPredictions.filter(row=>row.f5HomeOutcome!=null).map(row=>({probability:row.f5HomeProbability,outcome:row.f5HomeOutcome as number})),200),nrfiCalibration=fitProbabilityCalibration(priorPredictions.filter(row=>row.nrfiOutcome!=null).map(row=>({probability:row.nrfiProbability,outcome:row.nrfiOutcome as number})),200);
+        const calibratedOverProbability=overCalibration?applyProbabilityCalibration(scoreDistribution.over,overCalibration):null,calibratedF5HomeProbability=f5Calibration?applyProbabilityCalibration(f5.homeNoPush,f5Calibration):null,calibratedNrfiProbability=nrfiCalibration?applyProbabilityCalibration(nrfi.nrfi,nrfiCalibration):null;
+        const f5Outcome=game.firstFiveAway==null||game.firstFiveHome==null||game.firstFiveAway===game.firstFiveHome?null:Number(game.firstFiveHome>game.firstFiveAway),nrfiOutcome=game.firstInningAway==null||game.firstInningHome==null?null:Number(game.firstInningAway+game.firstInningHome===0);
+        predictions.push({ id:game.id, probability, calibratedProbability, outcome, correct:(probability>=0.5)===(outcome===1), expectedTotal:awayRuns+homeRuns, actualTotal:game.awayScore+game.homeScore,overProbability:scoreDistribution.over,calibratedOverProbability,overOutcome:Number(game.awayScore+game.homeScore>8.5),f5HomeProbability:f5.homeNoPush,calibratedF5HomeProbability,f5HomeOutcome:f5Outcome,nrfiProbability:nrfi.nrfi,calibratedNrfiProbability,nrfiOutcome });
+      }
     }
-    teams.set(game.awayId,{games:away.games+1,scored:away.scored+game.awayScore,allowed:away.allowed+game.homeScore});
-    teams.set(game.homeId,{games:home.games+1,scored:home.scored+game.homeScore,allowed:home.allowed+game.awayScore});
-    leagueRuns += game.awayScore + game.homeScore;
-    leagueTeamGames += 2;
-    if(game.firstInningAway!=null&&game.firstInningHome!=null&&game.firstFiveAway!=null&&game.firstFiveHome!=null){observedInningRuns+=game.firstInningAway+game.firstInningHome;observedFirstFiveRuns+=game.firstFiveAway+game.firstFiveHome;observedRunsForShares+=game.awayScore+game.homeScore;}
+    for(const game of dayGames){
+      const away = teams.get(game.awayId) ?? { games:0, scored:0, allowed:0 };
+      const home = teams.get(game.homeId) ?? { games:0, scored:0, allowed:0 };
+      teams.set(game.awayId,{games:away.games+1,scored:away.scored+game.awayScore,allowed:away.allowed+game.homeScore});
+      teams.set(game.homeId,{games:home.games+1,scored:home.scored+game.homeScore,allowed:home.allowed+game.awayScore});
+      leagueRuns += game.awayScore + game.homeScore;
+      leagueTeamGames += 2;
+      if(game.firstInningAway!=null&&game.firstInningHome!=null&&game.firstFiveAway!=null&&game.firstFiveHome!=null){observedInningRuns+=game.firstInningAway+game.firstInningHome;observedFirstFiveRuns+=game.firstFiveAway+game.firstFiveHome;observedRunsForShares+=game.awayScore+game.homeScore;}
+    }
   }
 
   const count = predictions.length;
