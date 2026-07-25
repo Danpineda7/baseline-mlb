@@ -1,4 +1,5 @@
 "use client";
+type InjuredPlayer={playerId:number;name:string;teamId:number;teamName:string;since:string;description:string};
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { countOverProbability, fairAmerican, priceDecision } from "@/lib/modeling";
@@ -9,7 +10,7 @@ type Hitter={id:number;name:string;battingOrder:number;confirmed:boolean;avg:str
 type ProjectionGame = { id:number; startsAt:string|null; status:string; venue:string; park:{factor:number;priorGames:number;sourceCutoff:string}; weather:{condition:string|null;temperature:number|null;wind:string|null;roof:string|null}; quality:{teamRecords:boolean;starterStats:boolean;awayStarter:boolean;homeStarter:boolean;lineups:boolean;weather:boolean;parkSample:boolean;blockingReasons:string[]}; uncertainty:number; away:Team; home:Team; total:{line:number;expectedRuns:number;overProbability:number;underProbability:number;overFairPrice:string;underFairPrice:string}; firstFive:{expectedRuns:number;awayWinProbability:number;homeWinProbability:number;pushProbability:number;awayFairPrice:string;homeFairPrice:string}; firstInning:{expectedRuns:number;nrfiProbability:number;yrfiProbability:number;nrfiFairPrice:string;yrfiFairPrice:string}; lineups:{away:Hitter[];home:Hitter[];confirmed:boolean}; drivers:string[]; recommendation:{reason:string} };
 type ModelInfo={name:string;calibrated:boolean;calibrationScope?:string;calibrationPoints?:number;featureCutoff?:string;omissions:string[]};
 type Coverage={available:number;expected:number};
-type DataHealth={score:number;coverage:{teams:Coverage;starters:Coverage;lineups:Coverage;hitters:Coverage;weather:Coverage;parks:Coverage;bullpens:Coverage;opponentStrikeouts:Coverage;platoonSplits:Coverage};featureCutoff:string;historicalFinals:number;calibrated:boolean;retrievedAt:string};
+type DataHealth={score:number;coverage:{teams:Coverage;starters:Coverage;lineups:Coverage;hitters:Coverage;weather:Coverage;parks:Coverage;bullpens:Coverage;opponentStrikeouts:Coverage;platoonSplits:Coverage;rosterStatuses:Coverage};featureCutoff:string;historicalFinals:number;calibrated:boolean;retrievedAt:string};
 type ApiResponse = { games:ProjectionGame[]; retrievedAt:string; error?:string; model?:ModelInfo;dataHealth?:DataHealth };
 type BacktestMarketMetric={count:number;accuracy:number|null;brier:number|null;logLoss:number|null};
 type CalibrationMetrics={count:number;brier:number;logLoss:number;rawBrier:number;rawLogLoss:number;rawEce:number;selectedMethod:string;selectedBrier:number;selectedLogLoss:number;verified:boolean};

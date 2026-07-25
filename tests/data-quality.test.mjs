@@ -4,8 +4,8 @@ import { projectionUncertainty, slateQualityScore } from "../lib/data-quality.ts
 
 test("slate quality weights exact source coverage",()=>{
   const full={available:10,expected:10};
-  assert.equal(slateQualityScore({teams:full,starters:full,lineups:full,hitters:full,weather:full,parks:full,bullpens:full,opponentStrikeouts:full,platoonSplits:full,calibrated:true}),100);
-  assert.ok(slateQualityScore({teams:full,starters:{available:0,expected:10},lineups:full,hitters:full,weather:full,parks:full,bullpens:full,opponentStrikeouts:full,platoonSplits:full,calibrated:true})<100);
+  assert.equal(slateQualityScore({teams:full,starters:full,lineups:full,hitters:full,weather:full,parks:full,bullpens:full,opponentStrikeouts:full,platoonSplits:full,rosterStatuses:full,calibrated:true}),100);
+  assert.ok(slateQualityScore({teams:full,starters:{available:0,expected:10},lineups:full,hitters:full,weather:full,parks:full,bullpens:full,opponentStrikeouts:full,platoonSplits:full,rosterStatuses:full,calibrated:true})<100);
 });
 
 test("missing critical inputs increase projection uncertainty",()=>{
