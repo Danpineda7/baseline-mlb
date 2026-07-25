@@ -46,4 +46,13 @@ test("calibrated predictions never learn from a future result",()=>{
   const games=Array.from({length:230},(_,index)=>({id:index+1,playedAt:`2026-${String(index+1).padStart(4,"0")}`,awayId:1,homeId:2,awayScore:index%2,homeScore:(index+1)%2}));
   const original=walkForwardBacktest(games,2),changed=walkForwardBacktest([...games.slice(0,-1),{...games.at(-1),homeScore:20}],2);
   assert.equal(original.predictions.at(-2).calibratedProbability,changed.predictions.at(-2).calibratedProbability);
+  assert.equal(original.predictions.at(-2).calibratedOverProbability,changed.predictions.at(-2).calibratedOverProbability);
+});
+
+test("market calibration selection uses only prior predictions",()=>{
+  const games=[];for(let index=0;index<240;index++)games.push({...game(index+1,(index%28)+1,1,2,index%5,(index+2)%6),playedAt:`2026-${String(index+1).padStart(4,"0")}`});
+  const result=walkForwardBacktest(games,2);
+  assert.ok(result.marketCalibratedMetrics.totalOver85);
+  assert.ok(result.liveMarketCalibrations.totalOver85);
+  assert.ok(["identity","regularized-platt"].includes(result.marketCalibratedMetrics.totalOver85.selectedMethod));
 });
