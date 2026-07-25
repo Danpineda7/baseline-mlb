@@ -1,0 +1,1 @@
+ALTER TABLE `tracked_bets` ADD `max_playable_odds` integer;

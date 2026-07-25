@@ -10,6 +10,7 @@ test("server recommendation resolver ignores client calculations and derives its
   assert.equal(result.probability,.62);
   assert.ok(result.edge>0);
   assert.ok(result.stakeUnits<=.005);
+  assert.ok(result.maxPlayableOdds!=null);
 });
 
 test("server recommendation resolver rejects mismatched props",()=>{

@@ -1,4 +1,4 @@
-import {countOverProbability,priceDecision} from "./modeling.ts";
+import {countOverProbability,playablePriceThreshold,priceDecision} from "./modeling.ts";
 
 type MarketInput={market:string;selectionKey:string;subjectId:number|null;line:number|null;americanOdds:number;oppositeOdds:number};
 type Side={name:string;abbreviation:string;winProbability:number;starter:{playerId:number|null;expectedStrikeouts:number|null}|null};
@@ -19,5 +19,5 @@ export function verifyRecommendation(game:RecommendationGame,input:MarketInput){
   if(probability==null)return{error:"The selected market has no authoritative projection."} as const;
   const decision=priceDecision(probability,input.americanOdds,game.uncertainty/100,input.oppositeOdds);
   if(!decision?.qualifies)return{error:"The authoritative projection does not clear every price and uncertainty gate."} as const;
-  return{probability,selection,marketProbability:decision.marketProbability,edge:decision.edge,expectedValue:decision.expectedValue,stakeUnits:decision.stakeFraction} as const;
+  return{probability,selection,marketProbability:decision.marketProbability,edge:decision.edge,expectedValue:decision.expectedValue,stakeUnits:decision.stakeFraction,maxPlayableOdds:playablePriceThreshold(probability,input.oppositeOdds,game.uncertainty/100)} as const;
 }

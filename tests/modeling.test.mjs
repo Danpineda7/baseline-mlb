@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, platoonAdjustedHitProjection, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, platoonAdjustedHitProjection, playablePriceThreshold, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -85,6 +85,15 @@ test("risk gate rejects small edge and sizes qualifying edge conservatively", ()
   const decision = priceDecision(0.62, -110, 0.4);
   assert.equal(decision?.qualifies, true);
   assert.ok((decision?.stakeFraction ?? 0) > 0 && (decision?.stakeFraction ?? 1) <= 0.005);
+});
+
+test("playable price threshold returns the worst qualifying offered price",()=>{
+  const threshold=playablePriceThreshold(.62,-110,.4);
+  assert.ok(threshold!=null);
+  assert.equal(priceDecision(.62,threshold,.4,-110)?.qualifies,true);
+  const decimal=odds=>odds>0?1+odds/100:1+100/Math.abs(odds);
+  const worse=[...Array.from({length:901},(_,i)=>-1000+i),...Array.from({length:901},(_,i)=>100+i)].filter(odds=>decimal(odds)<decimal(threshold));
+  assert.equal(worse.some(odds=>priceDecision(.62,odds,.4,-110)?.qualifies),false);
 });
 
 test("removes two-sided sportsbook vig before calculating edge", () => {

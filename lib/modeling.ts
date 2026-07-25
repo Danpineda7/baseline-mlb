@@ -108,6 +108,13 @@ export function priceDecision(modelProbability: number, americanOdds: number, un
   return { marketProbability, rawImpliedProbability, vigRemoved: noVig != null, edge, expectedValue, stakeFraction: qualifies ? stakeFraction : 0, qualifies };
 }
 
+export function playablePriceThreshold(modelProbability:number,opposingOdds:number,uncertainty=0.4){
+  const candidates:number[]=[];for(let odds=-1000;odds<=-100;odds++)candidates.push(odds);for(let odds=100;odds<=1000;odds++)candidates.push(odds);
+  const decimal=(odds:number)=>odds>0?1+odds/100:1+100/Math.abs(odds);
+  const qualifying=candidates.filter(odds=>priceDecision(modelProbability,odds,uncertainty,opposingOdds)?.qualifies).sort((left,right)=>decimal(left)-decimal(right));
+  return qualifying[0]??null;
+}
+
 export function inningsToDecimal(value: string | number | null | undefined) {
   if (typeof value === "number") return value;
   if (!value) return 0;
