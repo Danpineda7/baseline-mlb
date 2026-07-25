@@ -32,6 +32,13 @@ test("same-day results cannot influence another game on that date",()=>{
   assert.equal(original.predictions.find(row=>row.id===5).expectedTotal,changed.predictions.find(row=>row.id===5).expectedTotal);
 });
 
+test("team feature state resets at each season boundary",()=>{
+  const prior=[1,2,3].map(day=>game(day,day,1,2,8,1));
+  const current=[{...game(10,1,1,2,1,8),playedAt:"2027-04-01T18:00:00Z"},{...game(11,2,1,2,1,8),playedAt:"2027-04-02T18:00:00Z"}];
+  const result=walkForwardBacktest([...prior,...current],2);
+  assert.deepEqual(result.predictions.map(row=>row.id),[3]);
+});
+
 test("walk-forward validation reports core market families",()=>{
   const games=[];
   for(let day=1;day<=8;day++)games.push(game(day,day,1,2,day%4,3));

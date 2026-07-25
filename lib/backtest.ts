@@ -35,7 +35,11 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
   const dateGroups=new Map<string,HistoricalGame[]>();
   for(const game of sorted){const date=game.playedAt.slice(0,10);dateGroups.set(date,[...(dateGroups.get(date)??[]),game]);}
 
+  let activeSeason="";
   for (const dayGames of dateGroups.values()) {
+    const season=dayGames[0]?.playedAt.slice(0,4)??"";
+    if(activeSeason&&season!==activeSeason){teams.clear();leagueRuns=0;leagueTeamGames=0;observedInningRuns=0;observedFirstFiveRuns=0;observedRunsForShares=0;}
+    activeSeason=season;
     const priorPredictions=[...predictions];
     for(const game of dayGames){
       const away = teams.get(game.awayId) ?? { games:0, scored:0, allowed:0 };
