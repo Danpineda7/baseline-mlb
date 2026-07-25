@@ -16,7 +16,13 @@ test("grades player props and computes offered-price profit",()=>{
   assert.equal(hit?.result,"WON");assert.equal(hit?.profitUnits,0.0075);
   assert.equal(gradeBet({...base,market:"awayK",subjectId:20,line:6.5,selectionKey:"over"},game)?.result,"WON");
 });
-test("does not grade F5 when five innings are incomplete",()=>{
+test("voids F5 when five innings are incomplete",()=>{
   const shortened={...game,innings:game.innings.filter(inning=>inning.num<=4)};
-  assert.equal(gradeBet({...base,market:"f5",selectionKey:"home"},shortened),null);
+  const grade=gradeBet({...base,market:"f5",selectionKey:"home"},shortened);
+  assert.equal(grade?.result,"VOID");
+  assert.equal(grade?.profitUnits,0);
+});
+test("voids missing player participation and pushes an official tie",()=>{
+  assert.equal(gradeBet({...base,market:"hit",subjectId:999,selectionKey:"onePlus"},game)?.result,"VOID");
+  assert.equal(gradeBet({...base,market:"moneyline"},{...game,awayRuns:5,homeRuns:5})?.result,"PUSH");
 });
