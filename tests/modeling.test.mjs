@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -43,6 +43,15 @@ test("starter adjustment regresses small samples and understands baseball inning
   assert.ok(Math.abs(smallSample)<Math.abs(largeSample));
   assert.ok(largeSample<0);
   assert.equal(starterRunAdjustment(null,100),0);
+});
+
+test("bullpen fatigue is conservative and increases with concentrated recent workload",()=>{
+  assert.equal(bullpenFatigueAdjustment([]),0);
+  assert.equal(bullpenFatigueAdjustment([10,12,14,15]),0);
+  const moderate=bullpenFatigueAdjustment([35,25,10,0]);
+  const heavy=bullpenFatigueAdjustment([60,52,45,38]);
+  assert.ok(moderate>0&&heavy>moderate);
+  assert.ok(heavy<=0.18);
 });
 
 test("score distribution is normalized", () => {

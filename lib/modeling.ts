@@ -109,6 +109,13 @@ export function starterRunAdjustment(era: number | null, innings: number, league
   return clamp((regressedEra - leagueEra) * (5.5 / 9), -0.75, 0.75);
 }
 
+export function bullpenFatigueAdjustment(recentReliefPitches:number[]){
+  const valid=recentReliefPitches.filter(value=>Number.isFinite(value)&&value>=0).sort((a,b)=>b-a).slice(0,4);
+  if(!valid.length)return 0;
+  const fatigue=valid.reduce((sum,pitches)=>sum+clamp((pitches-15)/35,0,1),0)/4;
+  return clamp(fatigue*0.18,0,0.18);
+}
+
 export function projectScore(awayRuns: number, homeRuns: number, totalLine = 8.5) {
   let awayWin = 0;
   let homeWin = 0;
