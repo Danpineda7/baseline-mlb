@@ -3,10 +3,13 @@ import {countOverProbability,playablePriceThreshold,priceDecision} from "./model
 type MarketInput={market:string;selectionKey:string;subjectId:number|null;line:number|null;americanOdds:number;oppositeOdds:number};
 type Side={name:string;abbreviation:string;winProbability:number;starter:{playerId:number|null;expectedStrikeouts:number|null}|null};
 type Hitter={id:number;name:string;onePlusHitProbability:number|null;platoonAdjusted:boolean};
-export type RecommendationGame={id:number;startsAt:string|null;uncertainty:number;away:Side;home:Side;total:{line:number;overProbability:number;underProbability:number};firstFive:{awayWinProbability:number;homeWinProbability:number};firstInning:{nrfiProbability:number;yrfiProbability:number};lineups:{away:Hitter[];home:Hitter[];confirmed:boolean};quality:{teamRecords:boolean;starterStats:boolean;awayStarter:boolean;homeStarter:boolean;opponentStrikeouts:boolean}};
+type ValidatedMarkets={moneyline:boolean;total:boolean;firstFive:boolean;firstInning:boolean;pitcherStrikeouts:boolean;hitterHits:boolean};
+export type RecommendationGame={id:number;startsAt:string|null;uncertainty:number;away:Side;home:Side;total:{line:number;overProbability:number;underProbability:number};firstFive:{awayWinProbability:number;homeWinProbability:number};firstInning:{nrfiProbability:number;yrfiProbability:number};lineups:{away:Hitter[];home:Hitter[];confirmed:boolean};quality:{teamRecords:boolean;starterStats:boolean;awayStarter:boolean;homeStarter:boolean;opponentStrikeouts:boolean;validatedMarkets:ValidatedMarkets}};
 
 export function verifyRecommendation(game:RecommendationGame,input:MarketInput){
   if(!game.quality.teamRecords)return{error:"Both team season records are required."} as const;
+  const validationKey=input.market==="moneyline"?"moneyline":input.market==="over"||input.market==="under"?"total":input.market==="f5"?"firstFive":input.market==="nrfi"||input.market==="yrfi"?"firstInning":input.market==="awayK"||input.market==="homeK"?"pitcherStrikeouts":input.market==="hit"?"hitterHits":null;
+  if(validationKey&&!game.quality.validatedMarkets[validationKey])return{error:"This market has a projection, but its probability model has not passed market-specific walk-forward validation."} as const;
   if(["moneyline","over","under","f5","nrfi","yrfi"].includes(input.market)&&!game.quality.starterStats)return{error:"Both probable starters need official season statistics."} as const;
   let probability:number|null=null,selection="";
   if(input.market==="moneyline"&&(input.selectionKey==="home"||input.selectionKey==="away")){const side=input.selectionKey==="home"?game.home:game.away;probability=side.winProbability;selection=`${side.name} moneyline`;}
