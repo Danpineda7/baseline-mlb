@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { applyProbabilityCalibration, fitProbabilityCalibration, walkForwardBacktest } from "../lib/backtest.ts";
 
-function game(id, day, awayId, homeId, awayScore, homeScore) { return {id,playedAt:`2026-04-${String(day).padStart(2,"0")}T18:00:00Z`,awayId,homeId,awayScore,homeScore}; }
+function game(id, day, awayId, homeId, awayScore, homeScore) { return {id,playedAt:`2026-04-${String(day).padStart(2,"0")}T18:00:00Z`,awayId,homeId,awayScore,homeScore,firstInningAway:day%3===0?1:0,firstInningHome:day%4===0?1:0,firstFiveAway:Math.min(awayScore,2),firstFiveHome:Math.min(homeScore,3)}; }
 
 test("walk-forward predictions begin only after prior-game threshold", () => {
   const games=[];
@@ -20,6 +20,17 @@ test("future score changes cannot alter an earlier prediction", () => {
   assert.equal(original.predictions[0].probability,changed.predictions[0].probability);
   assert.equal(original.predictions[1].probability,changed.predictions[1].probability);
   assert.equal(original.predictions[2].probability,changed.predictions[2].probability);
+});
+
+test("walk-forward validation reports core market families",()=>{
+  const games=[];
+  for(let day=1;day<=8;day++)games.push(game(day,day,1,2,day%4,3));
+  const result=walkForwardBacktest(games,3);
+  assert.equal(result.marketMetrics.moneyline.count,5);
+  assert.equal(result.marketMetrics.totalOver85.count,5);
+  assert.ok(result.marketMetrics.firstFiveHome.count>0);
+  assert.equal(result.marketMetrics.nrfi.count,5);
+  for(const metrics of Object.values(result.marketMetrics)){assert.ok(metrics.brier==null||(metrics.brier>=0&&metrics.brier<=1));}
 });
 
 test("Platt calibration is monotonic and refuses small samples",()=>{

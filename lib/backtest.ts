@@ -1,6 +1,6 @@
-import { clamp, projectScore } from "./modeling.ts";
+import { clamp, firstInningMarkets, projectPeriod, projectScore } from "./modeling.ts";
 
-export type HistoricalGame = { id:number; playedAt:string; awayId:number; homeId:number; awayScore:number; homeScore:number };
+export type HistoricalGame = { id:number; playedAt:string; awayId:number; homeId:number; awayScore:number; homeScore:number; firstInningAway?:number; firstInningHome?:number; firstFiveAway?:number; firstFiveHome?:number };
 type TeamState = { games:number; scored:number; allowed:number };
 export type CalibrationModel={intercept:number;slope:number;count:number};
 const logit=(probability:number)=>Math.log(clamp(probability,0.001,0.999)/(1-clamp(probability,0.001,0.999)));
@@ -25,9 +25,10 @@ export function applyProbabilityCalibration(probability:number,model:Calibration
 
 export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames = 10) {
   const teams = new Map<number, TeamState>();
-  const predictions: Array<{id:number; probability:number; calibratedProbability:number|null; outcome:number; correct:boolean; expectedTotal:number; actualTotal:number}> = [];
+  const predictions: Array<{id:number; probability:number; calibratedProbability:number|null; outcome:number; correct:boolean; expectedTotal:number; actualTotal:number; overProbability:number;overOutcome:number;f5HomeProbability:number;f5HomeOutcome:number|null;nrfiProbability:number;nrfiOutcome:number|null}> = [];
   let leagueRuns = 0;
   let leagueTeamGames = 0;
+  let observedInningRuns=0,observedFirstFiveRuns=0,observedRunsForShares=0;
   const sorted = [...games].sort((a,b)=>a.playedAt.localeCompare(b.playedAt)||a.id-b.id);
 
   for (const game of sorted) {
@@ -40,15 +41,21 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
       const awayRuns = clamp(0.65*awayRaw + 0.35*leagueAverage - 0.08,2.2,7.2);
       const homeRuns = clamp(0.65*homeRaw + 0.35*leagueAverage + 0.08,2.2,7.2);
       const probability = projectScore(awayRuns,homeRuns).homeWin;
+      const scoreDistribution=projectScore(awayRuns,homeRuns,8.5);
+      const firstInningShare=observedRunsForShares>0?clamp(observedInningRuns/observedRunsForShares,0.08,0.16):0.115;
+      const firstFiveShare=observedRunsForShares>0?clamp(observedFirstFiveRuns/observedRunsForShares,0.45,0.68):0.56;
+      const f5=projectPeriod(awayRuns*firstFiveShare,homeRuns*firstFiveShare),nrfi=firstInningMarkets(awayRuns,homeRuns,firstInningShare);
       const outcome = game.homeScore > game.awayScore ? 1 : 0;
       const calibration=fitProbabilityCalibration(predictions.map(row=>({probability:row.probability,outcome:row.outcome})),200);
       const calibratedProbability=calibration?applyProbabilityCalibration(probability,calibration):null;
-      predictions.push({ id:game.id, probability, calibratedProbability, outcome, correct:(probability>=0.5)===(outcome===1), expectedTotal:awayRuns+homeRuns, actualTotal:game.awayScore+game.homeScore });
+      const f5Outcome=game.firstFiveAway==null||game.firstFiveHome==null||game.firstFiveAway===game.firstFiveHome?null:Number(game.firstFiveHome>game.firstFiveAway),nrfiOutcome=game.firstInningAway==null||game.firstInningHome==null?null:Number(game.firstInningAway+game.firstInningHome===0);
+      predictions.push({ id:game.id, probability, calibratedProbability, outcome, correct:(probability>=0.5)===(outcome===1), expectedTotal:awayRuns+homeRuns, actualTotal:game.awayScore+game.homeScore,overProbability:scoreDistribution.over,overOutcome:Number(game.awayScore+game.homeScore>8.5),f5HomeProbability:f5.homeNoPush,f5HomeOutcome:f5Outcome,nrfiProbability:nrfi.nrfi,nrfiOutcome });
     }
     teams.set(game.awayId,{games:away.games+1,scored:away.scored+game.awayScore,allowed:away.allowed+game.homeScore});
     teams.set(game.homeId,{games:home.games+1,scored:home.scored+game.homeScore,allowed:home.allowed+game.awayScore});
     leagueRuns += game.awayScore + game.homeScore;
     leagueTeamGames += 2;
+    if(game.firstInningAway!=null&&game.firstInningHome!=null&&game.firstFiveAway!=null&&game.firstFiveHome!=null){observedInningRuns+=game.firstInningAway+game.firstInningHome;observedFirstFiveRuns+=game.firstFiveAway+game.firstFiveHome;observedRunsForShares+=game.awayScore+game.homeScore;}
   }
 
   const count = predictions.length;
@@ -56,6 +63,8 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
   const logLoss = count ? predictions.reduce((sum,p)=>{const probability=clamp(p.probability,0.001,0.999);return sum-(p.outcome*Math.log(probability)+(1-p.outcome)*Math.log(1-probability));},0)/count : null;
   const accuracy = count ? predictions.filter(p=>p.correct).length/count : null;
   const totalMae = count ? predictions.reduce((sum,p)=>sum+Math.abs(p.expectedTotal-p.actualTotal),0)/count : null;
+  const binaryMetrics=(rows:Array<{probability:number;outcome:number}>)=>{const n=rows.length;if(!n)return{count:0,accuracy:null,brier:null,logLoss:null};return{count:n,accuracy:rows.filter(row=>(row.probability>=0.5)===(row.outcome===1)).length/n,brier:rows.reduce((sum,row)=>sum+(row.probability-row.outcome)**2,0)/n,logLoss:rows.reduce((sum,row)=>{const probability=clamp(row.probability,0.001,0.999);return sum-(row.outcome*Math.log(probability)+(1-row.outcome)*Math.log(1-probability));},0)/n};};
+  const marketMetrics={moneyline:binaryMetrics(predictions.map(row=>({probability:row.probability,outcome:row.outcome}))),totalOver85:binaryMetrics(predictions.map(row=>({probability:row.overProbability,outcome:row.overOutcome}))),firstFiveHome:binaryMetrics(predictions.filter(row=>row.f5HomeOutcome!=null).map(row=>({probability:row.f5HomeProbability,outcome:row.f5HomeOutcome as number}))),nrfi:binaryMetrics(predictions.filter(row=>row.nrfiOutcome!=null).map(row=>({probability:row.nrfiProbability,outcome:row.nrfiOutcome as number})))};
   const calibratedRows=predictions.filter((row):row is typeof row&{calibratedProbability:number}=>row.calibratedProbability!=null);
   const calibratedMetrics=calibratedRows.length?(()=>{const candidateBrier=calibratedRows.reduce((sum,row)=>sum+(row.calibratedProbability-row.outcome)**2,0)/calibratedRows.length,rawBrier=calibratedRows.reduce((sum,row)=>sum+(row.probability-row.outcome)**2,0)/calibratedRows.length,candidateLogLoss=calibratedRows.reduce((sum,row)=>{const probability=clamp(row.calibratedProbability,0.001,0.999);return sum-(row.outcome*Math.log(probability)+(1-row.outcome)*Math.log(1-probability));},0)/calibratedRows.length,rawLogLoss=calibratedRows.reduce((sum,row)=>{const probability=clamp(row.probability,0.001,0.999);return sum-(row.outcome*Math.log(probability)+(1-row.outcome)*Math.log(1-probability));},0)/calibratedRows.length;let weightedError=0;for(let index=0;index<10;index++){const low=index/10,high=(index+1)/10,rows=calibratedRows.filter(row=>row.probability>=low&&(index===9?row.probability<=high:row.probability<high));if(rows.length){const predicted=rows.reduce((sum,row)=>sum+row.probability,0)/rows.length,actual=rows.reduce((sum,row)=>sum+row.outcome,0)/rows.length;weightedError+=rows.length*Math.abs(predicted-actual);}}const rawEce=weightedError/calibratedRows.length,candidateImproves=candidateBrier<rawBrier;return{count:calibratedRows.length,brier:candidateBrier,logLoss:candidateLogLoss,rawBrier,rawLogLoss,rawEce,selectedMethod:candidateImproves?"regularized-platt":"identity",selectedBrier:candidateImproves?candidateBrier:rawBrier,selectedLogLoss:candidateImproves?candidateLogLoss:rawLogLoss,verified:candidateImproves||rawEce<=0.03};})():null;
   const buckets = Array.from({length:5},(_,index)=>{
@@ -64,5 +73,5 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
     return { low, high, count:rows.length, predicted:rows.length?rows.reduce((sum,p)=>sum+p.probability,0)/rows.length:null, actual:rows.length?rows.reduce((sum,p)=>sum+p.outcome,0)/rows.length:null };
   });
   const liveCalibration=fitProbabilityCalibration(predictions.map(row=>({probability:row.probability,outcome:row.outcome})),200);
-  return { predictions, metrics:{count,accuracy,brier,logLoss,totalMae},calibratedMetrics,calibration:buckets,liveCalibration };
+  return { predictions, metrics:{count,accuracy,brier,logLoss,totalMae},marketMetrics,calibratedMetrics,calibration:buckets,liveCalibration };
 }
