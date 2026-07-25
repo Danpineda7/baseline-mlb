@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, platoonAdjustedHitProjection, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -15,6 +15,17 @@ test("hitter one-plus hit model regresses rate and returns valid probability",()
   assert.ok(projection.hitRate>0.245&&projection.hitRate<0.3);
   assert.ok(projection.onePlusProbability>0&&projection.onePlusProbability<1);
   assert.equal(hitterHitProjection(0,0,0,0),null);
+});
+
+test("platoon hit adjustment shrinks small samples and caps large movement",()=>{
+  const base=hitterHitProjection(75,250,280,70);
+  assert.ok(base);
+  const favorable=platoonAdjustedHitProjection(base,40,100);
+  const tiny=platoonAdjustedHitProjection(base,4,10);
+  assert.ok(favorable&&tiny&&favorable.hitRate>base.hitRate&&tiny.hitRate>base.hitRate);
+  assert.ok(Math.abs(tiny.hitRate-base.hitRate)<Math.abs(favorable.hitRate-base.hitRate));
+  assert.ok(favorable.hitRate<=base.hitRate*1.2);
+  assert.equal(platoonAdjustedHitProjection(base,0,0),base);
 });
 
 test("strikeout prop regresses workload and prices count lines",()=>{

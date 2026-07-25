@@ -54,6 +54,14 @@ export function hitterHitProjection(hits:number,atBats:number,plateAppearances:n
   return {hitRate,expectedAtBats,expectedHits,onePlusProbability:1-Math.exp(-expectedHits)};
 }
 
+export function platoonAdjustedHitProjection(base:{hitRate:number;expectedAtBats:number;expectedHits:number;onePlusProbability:number}|null,splitHits:number,splitAtBats:number){
+  if(!base||splitHits<0||splitAtBats<=0)return base;
+  const reliability=splitAtBats/(splitAtBats+80);
+  const adjustedRate=clamp(reliability*(splitHits/splitAtBats)+(1-reliability)*base.hitRate,base.hitRate*0.8,base.hitRate*1.2);
+  const expectedHits=adjustedRate*base.expectedAtBats;
+  return {...base,hitRate:adjustedRate,expectedHits,onePlusProbability:1-Math.exp(-expectedHits)};
+}
+
 export function fairAmerican(probability: number) {
   const p = clamp(probability, 0.01, 0.99);
   const price = p >= 0.5 ? -(p / (1 - p)) * 100 : ((1 - p) / p) * 100;
