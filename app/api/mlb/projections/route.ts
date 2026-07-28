@@ -10,6 +10,9 @@ type TeamRecord = {
   gamesPlayed?: number;
   runsScored?: number;
   runsAllowed?: number;
+  wins?: number;
+  losses?: number;
+  winningPercentage?: string;
 };
 
 type StandingsPayload = { records?: Array<{ teamRecords?: TeamRecord[] }> };
@@ -162,6 +165,7 @@ export async function GET(request: Request) {
         venue: game.venue?.name ?? "Venue TBD",
         park:{factor:Number(parkFactor.toFixed(3)),priorGames:parkSample.homeGames+parkSample.roadGames,homeGames:parkSample.homeGames,roadGames:parkSample.roadGames,sourceCutoff:cutoffDate},
         weather:conditions,
+        records:{away:{wins:away?.wins??0,losses:away?.losses??0,pct:away?.winningPercentage??null},home:{wins:home?.wins??0,losses:home?.losses??0,pct:home?.winningPercentage??null}},
         away: { id: awayId, name: awayName, abbreviation: game.teams?.away?.team?.abbreviation ?? "AWY", probablePitcher: game.teams?.away?.probablePitcher?.fullName ?? null, starter:awayStarter?{playerId:game.teams?.away?.probablePitcher?.id??null,era:awayStarter.era,innings:Number(awayStarter.innings.toFixed(1)),gamesStarted:awayStarter.gamesStarted,runAdjustment:Number(awayStarterAdjustment.toFixed(2)),strikeOuts:awayStarter.strikeOuts,expectedStrikeouts:awayExpectedStrikeouts==null?null:Number(awayExpectedStrikeouts.toFixed(2))}:null,injuries:[...(injuriesByTeam.get(awayId)??[])].sort((a,b)=>b.since.localeCompare(a.since)),opponentStrikeoutRate:awayOpponent?Number((awayOpponent.strikeouts/awayOpponent.plateAppearances).toFixed(4)):null,bullpen:{recentPitches:awayBullpenPitches.reduce((sum,value)=>sum+value,0),taxedRelievers:awayBullpenPitches.filter(value=>value>=30).length,runAdjustment:Number(awayBullpenAdjustment.toFixed(3)),sourceWindow:`${workloadStart.toISOString().slice(0,10)} to ${cutoffDate}`}, expectedRuns: Number(awayRuns.toFixed(2)), winProbability: Number(awayWin.toFixed(4)), fairPrice: fairAmerican(awayWin) },
         home: { id: homeId, name: homeName, abbreviation: game.teams?.home?.team?.abbreviation ?? "HME", probablePitcher: game.teams?.home?.probablePitcher?.fullName ?? null, starter:homeStarter?{playerId:game.teams?.home?.probablePitcher?.id??null,era:homeStarter.era,innings:Number(homeStarter.innings.toFixed(1)),gamesStarted:homeStarter.gamesStarted,runAdjustment:Number(homeStarterAdjustment.toFixed(2)),strikeOuts:homeStarter.strikeOuts,expectedStrikeouts:homeExpectedStrikeouts==null?null:Number(homeExpectedStrikeouts.toFixed(2))}:null,injuries:[...(injuriesByTeam.get(homeId)??[])].sort((a,b)=>b.since.localeCompare(a.since)),opponentStrikeoutRate:homeOpponent?Number((homeOpponent.strikeouts/homeOpponent.plateAppearances).toFixed(4)):null,bullpen:{recentPitches:homeBullpenPitches.reduce((sum,value)=>sum+value,0),taxedRelievers:homeBullpenPitches.filter(value=>value>=30).length,runAdjustment:Number(homeBullpenAdjustment.toFixed(3)),sourceWindow:`${workloadStart.toISOString().slice(0,10)} to ${cutoffDate}`}, expectedRuns: Number(homeRuns.toFixed(2)), winProbability: Number(homeWin.toFixed(4)), fairPrice: fairAmerican(homeWin) },
         total: { line: 8.5, expectedRuns: Number((awayRuns + homeRuns).toFixed(2)), overProbability: Number(distribution.over.toFixed(4)), underProbability: Number(distribution.under.toFixed(4)), overFairPrice: fairAmerican(distribution.over), underFairPrice: fairAmerican(distribution.under) },
