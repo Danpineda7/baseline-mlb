@@ -41,6 +41,13 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
     if(activeSeason&&season!==activeSeason){teams.clear();leagueRuns=0;leagueTeamGames=0;observedInningRuns=0;observedFirstFiveRuns=0;observedRunsForShares=0;}
     activeSeason=season;
     const priorPredictions=[...predictions];
+    // Every game on a date must use the same prior-day calibration. Fit these
+    // models once per date instead of repeating the identical CPU-heavy work
+    // for every game on the slate.
+    const dayCalibration=fitProbabilityCalibration(priorPredictions.map(row=>({probability:row.probability,outcome:row.outcome})),200);
+    const dayOverCalibration=fitProbabilityCalibration(priorPredictions.map(row=>({probability:row.overProbability,outcome:row.overOutcome})),200);
+    const dayF5Calibration=fitProbabilityCalibration(priorPredictions.filter(row=>row.f5HomeOutcome!=null).map(row=>({probability:row.f5HomeProbability,outcome:row.f5HomeOutcome as number})),200);
+    const dayNrfiCalibration=fitProbabilityCalibration(priorPredictions.filter(row=>row.nrfiOutcome!=null).map(row=>({probability:row.nrfiProbability,outcome:row.nrfiOutcome as number})),200);
     for(const game of dayGames){
       const away = teams.get(game.awayId) ?? { games:0, scored:0, allowed:0 };
       const home = teams.get(game.homeId) ?? { games:0, scored:0, allowed:0 };
@@ -56,10 +63,8 @@ export function walkForwardBacktest(games: HistoricalGame[], minimumPriorGames =
         const firstFiveShare=observedRunsForShares>0?clamp(observedFirstFiveRuns/observedRunsForShares,0.45,0.68):0.56;
         const f5=projectPeriod(awayRuns*firstFiveShare,homeRuns*firstFiveShare),nrfi=firstInningMarkets(awayRuns,homeRuns,firstInningShare);
         const outcome = game.homeScore > game.awayScore ? 1 : 0;
-        const calibration=fitProbabilityCalibration(priorPredictions.map(row=>({probability:row.probability,outcome:row.outcome})),200);
-        const calibratedProbability=calibration?applyProbabilityCalibration(probability,calibration):null;
-        const overCalibration=fitProbabilityCalibration(priorPredictions.map(row=>({probability:row.overProbability,outcome:row.overOutcome})),200),f5Calibration=fitProbabilityCalibration(priorPredictions.filter(row=>row.f5HomeOutcome!=null).map(row=>({probability:row.f5HomeProbability,outcome:row.f5HomeOutcome as number})),200),nrfiCalibration=fitProbabilityCalibration(priorPredictions.filter(row=>row.nrfiOutcome!=null).map(row=>({probability:row.nrfiProbability,outcome:row.nrfiOutcome as number})),200);
-        const calibratedOverProbability=overCalibration?applyProbabilityCalibration(scoreDistribution.over,overCalibration):null,calibratedF5HomeProbability=f5Calibration?applyProbabilityCalibration(f5.homeNoPush,f5Calibration):null,calibratedNrfiProbability=nrfiCalibration?applyProbabilityCalibration(nrfi.nrfi,nrfiCalibration):null;
+        const calibratedProbability=dayCalibration?applyProbabilityCalibration(probability,dayCalibration):null;
+        const calibratedOverProbability=dayOverCalibration?applyProbabilityCalibration(scoreDistribution.over,dayOverCalibration):null,calibratedF5HomeProbability=dayF5Calibration?applyProbabilityCalibration(f5.homeNoPush,dayF5Calibration):null,calibratedNrfiProbability=dayNrfiCalibration?applyProbabilityCalibration(nrfi.nrfi,dayNrfiCalibration):null;
         const f5Outcome=game.firstFiveAway==null||game.firstFiveHome==null||game.firstFiveAway===game.firstFiveHome?null:Number(game.firstFiveHome>game.firstFiveAway),nrfiOutcome=game.firstInningAway==null||game.firstInningHome==null?null:Number(game.firstInningAway+game.firstInningHome===0);
         predictions.push({ id:game.id, probability, calibratedProbability, outcome, correct:(probability>=0.5)===(outcome===1), expectedTotal:awayRuns+homeRuns, actualTotal:game.awayScore+game.homeScore,overProbability:scoreDistribution.over,calibratedOverProbability,overOutcome:Number(game.awayScore+game.homeScore>8.5),f5HomeProbability:f5.homeNoPush,calibratedF5HomeProbability,f5HomeOutcome:f5Outcome,nrfiProbability:nrfi.nrfi,calibratedNrfiProbability,nrfiOutcome });
       }
