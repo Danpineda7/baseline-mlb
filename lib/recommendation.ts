@@ -6,10 +6,10 @@ type Hitter={id:number;name:string;onePlusHitProbability:number|null;platoonAdju
 type ValidatedMarkets={moneyline:boolean;total:boolean;firstFive:boolean;firstInning:boolean;pitcherStrikeouts:boolean;hitterHits:boolean};
 export type RecommendationGame={id:number;startsAt:string|null;uncertainty:number;away:Side;home:Side;total:{line:number;overProbability:number;underProbability:number};firstFive:{awayWinProbability:number;homeWinProbability:number};firstInning:{nrfiProbability:number;yrfiProbability:number};lineups:{away:Hitter[];home:Hitter[];confirmed:boolean};quality:{teamRecords:boolean;starterStats:boolean;awayStarter:boolean;homeStarter:boolean;opponentStrikeouts:boolean;validatedMarkets:ValidatedMarkets}};
 
-export function verifyRecommendation(game:RecommendationGame,input:MarketInput){
+export function verifyRecommendation(game:RecommendationGame,input:MarketInput,options:{requireValidated?:boolean;requireQualifies?:boolean}={}){const requireValidated=options.requireValidated??true,requireQualifies=options.requireQualifies??true;
   if(!game.quality.teamRecords)return{error:"Both team season records are required."} as const;
   const validationKey=input.market==="moneyline"?"moneyline":input.market==="over"||input.market==="under"?"total":input.market==="f5"?"firstFive":input.market==="nrfi"||input.market==="yrfi"?"firstInning":input.market==="awayK"||input.market==="homeK"?"pitcherStrikeouts":input.market==="hit"?"hitterHits":null;
-  if(validationKey&&!game.quality.validatedMarkets[validationKey])return{error:"This market has a projection, but its probability model has not passed market-specific walk-forward validation."} as const;
+  if(requireValidated&&validationKey&&!game.quality.validatedMarkets[validationKey])return{error:"This market has a projection, but its probability model has not passed market-specific walk-forward validation."} as const;
   if(["moneyline","over","under","f5","nrfi","yrfi"].includes(input.market)&&!game.quality.starterStats)return{error:"Both probable starters need official season statistics."} as const;
   let probability:number|null=null,pushProbability=0,selection="";
   if(input.market==="moneyline"&&(input.selectionKey==="home"||input.selectionKey==="away")){const side=input.selectionKey==="home"?game.home:game.away;probability=side.winProbability;selection=`${side.name} moneyline`;}
@@ -21,6 +21,6 @@ export function verifyRecommendation(game:RecommendationGame,input:MarketInput){
   else return{error:"Unsupported or inconsistent market selection."} as const;
   if(probability==null)return{error:"The selected market has no authoritative projection."} as const;
   const decision=priceDecision(probability,input.americanOdds,game.uncertainty/100,input.oppositeOdds,pushProbability);
-  if(!decision?.qualifies)return{error:"The authoritative projection does not clear every price and uncertainty gate."} as const;
-  return{probability,selection,marketProbability:decision.marketProbability,edge:decision.edge,expectedValue:decision.expectedValue,stakeUnits:decision.stakeFraction,maxPlayableOdds:playablePriceThreshold(probability,input.oppositeOdds,game.uncertainty/100,pushProbability)} as const;
+  if(!decision)return{error:"The two-sided market price could not be evaluated."} as const;if(requireQualifies&&!decision.qualifies)return{error:"The authoritative projection does not clear every price and uncertainty gate."} as const;
+  return{probability,selection,marketProbability:decision.marketProbability,edge:decision.edge,expectedValue:decision.expectedValue,stakeUnits:decision.qualifies?decision.stakeFraction:0,maxPlayableOdds:playablePriceThreshold(probability,input.oppositeOdds,game.uncertainty/100,pushProbability),qualifies:decision.qualifies,marketValidated:validationKey?game.quality.validatedMarkets[validationKey]:false} as const;
 }
