@@ -98,6 +98,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .odds-title small,.decision small { color:#7c8798; font-size:8px; font-weight:850; letter-spacing:.07em; }
 .odds-title strong { font-size:11px; }
 .odds-title>span { color:var(--mlb-navy); font-family:var(--font-mono); font-size:10px; font-weight:800; }
+.odds-vault{margin:14px 0;padding:18px 20px;border:1px solid #cad7e5;border-left:5px solid var(--mlb-blue);border-radius:12px;background:#f7fbff;display:grid;grid-template-columns:1.2fr .8fr 1fr;gap:18px;align-items:center}.odds-vault h2{margin:3px 0;font-size:18px}.odds-vault>div>span,.vault-source span{display:block;color:#667287;font-size:10px}.vault-source{display:grid;gap:4px}.vault-source strong{font-size:11px}.vault-source em{justify-self:start;padding:5px 7px;border-radius:5px;font-size:8px;font-style:normal;font-weight:900}.vault-source em.ready{background:#dff2e6;color:#17623a}.vault-source em.waiting{background:#fff0cf;color:#875a08}.vault-capture{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:end}.vault-capture label{display:grid;gap:4px;color:#667287;font-size:9px;font-weight:800}.vault-capture input{padding:8px;border:1px solid #cad3df;border-radius:6px;background:#fff}.vault-capture button{padding:9px 11px;border:0;border-radius:6px;background:var(--mlb-blue);color:#fff;font-size:9px;font-weight:900}.vault-capture small{grid-column:1/-1;color:#526173}
 .odds-inputs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:11px 0; }
 .odds-inputs.three { grid-template-columns:repeat(3,1fr); }
 .odds-inputs label { display:grid; gap:4px; color:#667287; font-size:9px; font-weight:700; }
@@ -151,6 +152,7 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:9
 .calibration-track b { position:absolute; top:-3px; width:3px; height:13px; border-radius:2px; background:var(--mlb-red); transform:translateX(-1px); }
 .performance-foot { display:flex; justify-content:space-between; gap:16px; padding:10px 22px; border-top:1px solid #edf0f4; background:#fafbfd; color:#7d8898; font-size:9px; }
 @media(max-width:520px){.decision{grid-template-columns:1fr 1fr}.odds-inputs,.odds-inputs.three{grid-template-columns:1fr}}
+@media(max-width:800px){.odds-vault{grid-template-columns:1fr}.vault-capture{grid-template-columns:1fr}}
 @media(max-width:420px){.environment-grid{grid-template-columns:1fr 1fr}.environment-grid>div:last-child{grid-column:1/-1}}
 @media(max-width:420px){.availability-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.calibration-row{grid-template-columns:52px 1fr 65px}.calibration-row>small{display:none}.performance-foot{display:grid}}
