@@ -3,7 +3,7 @@ import { applyProbabilityCalibration, walkForwardBacktest, type CalibrationModel
 import { projectionUncertainty, slateQualityScore } from "@/lib/data-quality";
 import { currentInjuredList, type InjuryTransaction } from "@/lib/availability";
 import { COMPLETED_SEASON_TTL, CURRENT_SEASON_TTL, fetchMlb } from "@/lib/mlb-fetch";
-import { persistForecastSnapshots } from "@/lib/prospective";
+import { persistForecastSnapshots, persistProjectionArchives } from "@/lib/prospective";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -190,7 +190,7 @@ export async function GET(request: Request) {
         ],
       };
     }).filter((game) => game.id > 0);
-    await persistForecastSnapshots(games,date,"multi-market-research-v1.4").catch(()=>0);
+    await Promise.all([persistForecastSnapshots(games,date,"multi-market-research-v1.4"),persistProjectionArchives(games,date,"multi-market-research-v1.4")]).catch(()=>[]);
 
     const currentTeamIds=[...new Set(scheduledGames.flatMap(game=>[game.teams?.away?.team?.id,game.teams?.home?.team?.id]).filter((id):id is number=>Boolean(id)))];
     const coverage={
