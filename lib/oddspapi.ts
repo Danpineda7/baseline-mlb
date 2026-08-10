@@ -1,0 +1,29 @@
+type D1Like={prepare:(sql:string)=>{bind:(...values:unknown[])=>unknown};batch:(statements:unknown[])=>Promise<unknown>};
+type Fixture={fixtureId:string;sportId:number;tournamentId:number;startTime:string;participant1Name:string;participant2Name:string;tournamentName:string;statusId:number};
+type Market={marketId:number;marketName:string;playerProp:boolean;sportId:number;handicap:number|null;period:string;marketType:string;outcomes:Array<{outcomeId:number;outcomeName:string}>};
+type GameRef={id:number;awayTeam:string;homeTeam:string};
+
+const api="https://api.oddspapi.io/v4";
+const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+const american=(decimal:number)=>Math.round(decimal>=2?(decimal-1)*100:-100/(decimal-1));
+const normalized=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,"").replace(/baseballclub|club/g,"");
+const sameTeam=(left:string,right:string)=>{const a=normalized(left),b=normalized(right);return a===b||a.includes(b)||b.includes(a)||a.slice(-7)===b.slice(-7);};
+async function get<T>(path:string,key:string,params:Record<string,string>={}){const url=new URL(`${api}/${path}`);url.searchParams.set("apiKey",key);for(const [name,value] of Object.entries(params))url.searchParams.set(name,value);const response=await fetch(url,{headers:{accept:"application/json"}});if(!response.ok){const detail=(await response.text()).slice(0,180);throw new Error(`OddsPapi ${path} returned ${response.status}${detail?`: ${detail}`:""}`);}return response.json() as Promise<T>;}
+
+export async function syncOddsPapiDate(db:D1Like,key:string,date:string,games:GameRef[],limit=3){
+  const sports=await get<Array<{sportId:number;sportName:string}>>("sports",key,{language:"en"});const baseball=sports.find(item=>item.sportName.toLowerCase()==="baseball");if(!baseball)throw new Error("OddsPapi did not return its Baseball sport.");
+  const fixtures=await get<Fixture[]>("fixtures",key,{sportId:String(baseball.sportId),from:`${date}T00:00:00Z`,to:`${date}T23:59:59Z`,hasOdds:"true",language:"en"});
+  const mlbFixtures=fixtures.filter(item=>/major league|\bmlb\b/i.test(item.tournamentName));
+  const marketList=await get<Market[]>("markets",key,{language:"en"}),markets=new Map(marketList.filter(item=>item.sportId===baseball.sportId).map(item=>[String(item.marketId),item]));
+  const imported=await (db.prepare(`SELECT DISTINCT provider_event_id AS id FROM market_odds_observations WHERE provider='OddsPapi' AND game_date=?`).bind(date) as {all:()=>Promise<{results:Array<{id:string}>}>}).all();const done=new Set(imported.results.map(row=>row.id));
+  const queue=mlbFixtures.filter(item=>!done.has(item.fixtureId)).slice(0,Math.max(1,Math.min(4,limit)));let observations=0,matched=0;
+  for(let fixtureIndex=0;fixtureIndex<queue.length;fixtureIndex++){
+    if(fixtureIndex)await delay(5100);
+    const fixture=queue[fixtureIndex],game=games.find(item=>(sameTeam(item.awayTeam,fixture.participant1Name)&&sameTeam(item.homeTeam,fixture.participant2Name))||(sameTeam(item.awayTeam,fixture.participant2Name)&&sameTeam(item.homeTeam,fixture.participant1Name)));if(game)matched++;
+    const history=await get<{bookmakers:Record<string,{markets:Record<string,{outcomes:Record<string,{players:Record<string,Array<{createdAt:string;price:number;limit:number|null;active:boolean}>>}>}>}>}>("historical-odds",key,{fixtureId:fixture.fixtureId,bookmakers:"pinnacle,draftkings,fanduel"});const statements=[] as unknown[];
+    for(const [book,bookData] of Object.entries(history.bookmakers??{}))for(const [marketId,marketData] of Object.entries(bookData.markets??{}))for(const [outcomeId,outcomeData] of Object.entries(marketData.outcomes??{}))for(const [playerId,snapshots] of Object.entries(outcomeData.players??{}))for(const snapshot of snapshots){if(!Number.isFinite(snapshot.price)||snapshot.price<=1)continue;const market=markets.get(marketId),outcome=market?.outcomes.find(item=>String(item.outcomeId)===outcomeId),selection=`${outcome?.outcomeName??`Outcome ${outcomeId}`}${playerId!=="0"?` · player ${playerId}`:""}`,line=market?.handicap??null,id=["oddspapi",fixture.fixtureId,book,marketId,outcomeId,playerId,snapshot.createdAt].join("|");statements.push(db.prepare(`INSERT OR IGNORE INTO market_odds_observations (id,game_id,provider_event_id,game_date,starts_at,away_team,home_team,provider,sportsbook,market,selection,line,american_odds,observed_at,source_tier,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id,game?.id??null,fixture.fixtureId,date,fixture.startTime,game?.awayTeam??fixture.participant1Name,game?.homeTeam??fixture.participant2Name,"OddsPapi",book,market?.marketName??`Market ${marketId}`,selection,line,american(snapshot.price),snapshot.createdAt,"historical",JSON.stringify({marketId,outcomeId,playerId,period:market?.period,marketType:market?.marketType,playerProp:market?.playerProp,limit:snapshot.limit,active:snapshot.active})));
+    }
+    for(let i=0;i<statements.length;i+=75)await db.batch(statements.slice(i,i+75));observations+=statements.length;
+  }
+  return{date,fixturesFound:mlbFixtures.length,fixturesImported:queue.length,fixturesRemaining:Math.max(0,mlbFixtures.length-done.size-queue.length),matchedGames:matched,observations};
+}
