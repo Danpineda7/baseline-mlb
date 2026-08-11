@@ -1,6 +1,12 @@
 import { walkForwardBacktest, type HistoricalGame } from "@/lib/backtest";
-import { COMPLETED_SEASON_TTL, CURRENT_SEASON_TTL, fetchMlb } from "@/lib/mlb-fetch";
+import { CURRENT_SEASON_TTL, fetchMlb } from "@/lib/mlb-fetch";
 import { getOrCompute } from "@/lib/computed-cache";
+import { getDatabase } from "@/lib/db";
+import { priorSeasonGames } from "@/lib/slate-context";
+
+// API routes are always dynamic: they read the database and live MLB feeds
+// and must never be baked into the build as static responses.
+export const dynamic="force-dynamic";
 
 type Feed = { dates?:Array<{games?:Array<{gamePk?:number;gameDate?:string;status?:{abstractGameState?:string};teams?:{away?:{team?:{id?:number};score?:number};home?:{team?:{id?:number};score?:number}};linescore?:{innings?:Array<{num?:number;away?:{runs?:number};home?:{runs?:number}}>}}>}> };
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -19,9 +25,12 @@ export async function GET(request:Request){
     // The three-season walk-forward is CPU-heavy and depends only on finished
     // games, so it computes once per `through` date and is shared by everyone.
     const compute=async()=>{
-      const responses=await Promise.all(seasons.map(year=>fetchMlb(endpoint(`${year}-03-15`,year===season?through:`${year}-10-31`),year===season?CURRENT_SEASON_TTL:COMPLETED_SEASON_TTL)));
-      const failed=responses.find(response=>!response.ok);if(failed)throw new Error(`MLB responded ${failed.status}`);
-      const feeds=await Promise.all(responses.map(response=>response.json() as Promise<Feed>)),games=feeds.flatMap(historicalGames),result=walkForwardBacktest(games,10);
+      // Prior seasons come from immutable cached artifacts (shared with the
+      // projections slate context) so a cold call stays inside free-tier
+      // serverless timeouts; only the in-progress season is fetched fresh.
+      const [currentResponse,priorTwo,priorOne]=await Promise.all([fetchMlb(endpoint(`${season}-03-15`,through),CURRENT_SEASON_TTL),priorSeasonGames(season-2),priorSeasonGames(season-1)]);
+      if(!currentResponse.ok)throw new Error(`MLB responded ${currentResponse.status}`);
+      const games=[...priorTwo,...priorOne,...historicalGames(await currentResponse.json() as Feed)],result=walkForwardBacktest(games,10);
       // Per-prediction rows and live models stay server-side; the response
       // carries only the summary metrics the dashboard renders.
       const {predictions:_predictions,teamRates:_teamRates,liveLeagueAverage:_liveLeagueAverage,liveCalibration:_liveCalibration,liveMarketCalibrations:_liveMarketCalibrations,...summary}=result;
@@ -29,8 +38,7 @@ export async function GET(request:Request){
     };
     let payload:Record<string,unknown>;
     try{
-      const {env}=await import("cloudflare:workers");
-      const cached=await getOrCompute(env.DB as unknown as Parameters<typeof getOrCompute>[0],`backtest:${through}`,"backtest",BACKTEST_TTL_SECONDS,compute);
+      const cached=await getOrCompute(getDatabase(),`backtest:${through}`,"backtest",BACKTEST_TTL_SECONDS,compute);
       payload={...cached.value,retrievedAt:cached.computedAt,cached:cached.cached};
     }catch{
       payload={...await compute(),retrievedAt:new Date().toISOString(),cached:false};

@@ -1,6 +1,8 @@
 import { COMPLETED_SEASON_TTL, CURRENT_SEASON_TTL, fetchMlb } from "./mlb-fetch.ts";
 import { walkForwardBacktest, type CalibrationModel, type HistoricalGame } from "./backtest.ts";
 import { clamp } from "./modeling.ts";
+import { getOrCompute } from "./computed-cache.ts";
+import { getDatabase } from "./db.ts";
 
 type ContextPayload={dates?:Array<{games?:Array<{gamePk?:number;gameDate?:string;venue?:{id?:number};status?:{abstractGameState?:string};teams?:{away?:{team?:{id?:number};score?:number};home?:{team?:{id?:number};score?:number}};linescore?:{innings?:Array<{num?:number;away?:{runs?:number};home?:{runs?:number}}>} }>}>};
 
@@ -25,14 +27,34 @@ function extractHistoricalGames(payload:ContextPayload){return(payload.dates??[]
  * empirical inning shares. Designed to be cached per cutoff date via
  * computed-cache — the underlying data is final and cannot change.
  */
+// A finished season's finals never change. Caching each prior season as its
+// own artifact keeps every cold computation step short enough for free-tier
+// serverless timeouts (10s) — and makes warm-up self-healing: even if one
+// request dies mid-way, the season artifacts it stored persist.
+const SEASON_ARTIFACT_TTL_SECONDS=180*24*60*60;
+
+export async function priorSeasonGames(year:number):Promise<HistoricalGame[]>{
+  const compute=async()=>{
+    const url=new URL("https://statsapi.mlb.com/api/v1/schedule");
+    url.searchParams.set("sportId","1");url.searchParams.set("startDate",`${year}-03-15`);url.searchParams.set("endDate",`${year}-10-31`);url.searchParams.set("gameType","R");url.searchParams.set("hydrate","linescore");
+    const response=await fetchMlb(url,COMPLETED_SEASON_TTL);
+    if(!response.ok)throw new Error(`MLB responded ${response.status} for season ${year}`);
+    return extractHistoricalGames(await response.json() as ContextPayload);
+  };
+  try{
+    const cached=await getOrCompute(getDatabase(),`season-games:${year}`,"season-games",SEASON_ARTIFACT_TTL_SECONDS,compute);
+    return cached.value;
+  }catch{
+    return compute().catch(()=>[]);
+  }
+}
+
 export async function computeSlateContext(season:number,cutoffDate:string):Promise<SlateContext>{
   const contextUrl=new URL("https://statsapi.mlb.com/api/v1/schedule");
   contextUrl.searchParams.set("sportId","1");contextUrl.searchParams.set("startDate",`${season}-03-15`);contextUrl.searchParams.set("endDate",cutoffDate);contextUrl.searchParams.set("gameType","R");contextUrl.searchParams.set("hydrate","linescore");
-  const priorContextUrls=[season-2,season-1].map(year=>{const url=new URL("https://statsapi.mlb.com/api/v1/schedule");url.searchParams.set("sportId","1");url.searchParams.set("startDate",`${year}-03-15`);url.searchParams.set("endDate",`${year}-10-31`);url.searchParams.set("gameType","R");url.searchParams.set("hydrate","linescore");return url;});
-  const [contextResponse,...priorContextResponses]=await Promise.all([fetchMlb(contextUrl,CURRENT_SEASON_TTL),...priorContextUrls.map(url=>fetchMlb(url,COMPLETED_SEASON_TTL))]);
+  const [contextResponse,...priorSeasons]=await Promise.all([fetchMlb(contextUrl,CURRENT_SEASON_TTL),priorSeasonGames(season-2),priorSeasonGames(season-1)]);
 
-  const historicalGames:HistoricalGame[]=[];
-  for(const response of priorContextResponses){if(response.ok)historicalGames.push(...extractHistoricalGames(await response.json() as ContextPayload));}
+  const historicalGames:HistoricalGame[]=[...priorSeasons.flat()];
 
   let firstInningShare=0.115,firstFiveShare=0.56,contextGames=0;
   const teamEnvironments=new Map<number,{homeGames:number;homeRuns:number;roadGames:number;roadRuns:number}>();

@@ -8,6 +8,11 @@ import { logSystemEvent } from "@/lib/system-events";
 import { computeSlateContext, type SlateContext } from "@/lib/slate-context";
 import { getOrCompute } from "@/lib/computed-cache";
 import { VALIDATION_EPOCH } from "@/lib/epoch";
+import { getDatabase } from "@/lib/db";
+
+// API routes are always dynamic: they read the database and live MLB feeds
+// and must never be baked into the build as static responses.
+export const dynamic="force-dynamic";
 
 type TeamRecord = {
   team?: { id?: number; name?: string };
@@ -69,13 +74,12 @@ export async function GET(request: Request) {
   const transactionsUrl=new URL("https://statsapi.mlb.com/api/v1/transactions");transactionsUrl.searchParams.set("startDate",`${season}-01-01`);transactionsUrl.searchParams.set("endDate",cutoffDate);transactionsUrl.searchParams.set("sportId","1");
 
   try {
-    const {env}=await import("cloudflare:workers");
     // The three-season walk-forward calibration is the CPU-heavy part of this
     // route; it depends only on finished games through the cutoff date, so it
     // is computed once per date and shared by every visitor.
     const slateContextPromise:Promise<SlateContext>=(async()=>{
       try{
-        const cached=await getOrCompute(env.DB as unknown as Parameters<typeof getOrCompute>[0],`slate-context:${cutoffDate}`,"slate-context",SLATE_CONTEXT_TTL_SECONDS,()=>computeSlateContext(season,cutoffDate));
+        const cached=await getOrCompute(getDatabase(),`slate-context:${cutoffDate}`,"slate-context",SLATE_CONTEXT_TTL_SECONDS,()=>computeSlateContext(season,cutoffDate));
         return cached.value;
       }catch{
         return computeSlateContext(season,cutoffDate);
@@ -118,7 +122,7 @@ export async function GET(request: Request) {
     try{
       const gameIds=scheduledGames.map(game=>game.gamePk??0).filter(id=>id>0);
       if(gameIds.length){
-        const query=await env.DB.prepare(`SELECT game_id,line FROM market_odds_observations WHERE game_id IN (${gameIds.map(()=>"?").join(",")}) AND line IS NOT NULL AND observed_at >= ? AND json_extract(metadata_json,'$.canonicalMarket')='over' ORDER BY observed_at ASC`).bind(...gameIds,VALIDATION_EPOCH).all<{game_id:number;line:number}>();
+        const query=await getDatabase().prepare(`SELECT game_id,line FROM market_odds_observations WHERE game_id IN (${gameIds.map(()=>"?").join(",")}) AND line IS NOT NULL AND observed_at >= ? AND json_extract(metadata_json,'$.canonicalMarket')='over' ORDER BY observed_at ASC`).bind(...gameIds,VALIDATION_EPOCH).all<{game_id:number;line:number}>();
         for(const row of query.results??[])if(row.line>=5.5&&row.line<=13.5)totalLines.set(row.game_id,row.line);
       }
     }catch{/* Reference-line totals remain valid without the vault. */}

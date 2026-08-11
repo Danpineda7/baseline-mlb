@@ -1,3 +1,7 @@
+
+// API routes are always dynamic: they read the database and live MLB feeds
+// and must never be baked into the build as static responses.
+export const dynamic="force-dynamic";
 type MlbTeamSide = {
   score?: number;
   team?: { id?: number; name?: string; abbreviation?: string };

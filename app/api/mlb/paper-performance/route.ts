@@ -1,4 +1,9 @@
 import { VALIDATION_EPOCH } from "@/lib/epoch";
+import { getDatabase } from "@/lib/db";
+
+// API routes are always dynamic: they read the database and live MLB feeds
+// and must never be baked into the build as static responses.
+export const dynamic="force-dynamic";
 
 // Public paper scoreboard. Evidence rules:
 // - only post-epoch rows count (earlier data predates the trust fixes);
@@ -33,15 +38,15 @@ FROM tracked_bets WHERE mode='PAPER' AND created_at >= ?1 GROUP BY bucket ORDER 
 
 export async function GET(){
   try{
-    const {env}=await import("cloudflare:workers");
+    const db=getDatabase();
     const [byMarket,byMonth,overallRow,decisionsQuery,testersRow,clvRow,unverifiedRow]=await Promise.all([
-      env.DB.prepare(GROUP_SQL("market")).bind(VALIDATION_EPOCH).all<GroupRow>(),
-      env.DB.prepare(GROUP_SQL("substr(created_at,1,7)")).bind(VALIDATION_EPOCH).all<GroupRow>(),
-      env.DB.prepare(GROUP_SQL("'all'")).bind(VALIDATION_EPOCH).first<GroupRow>(),
-      env.DB.prepare("SELECT decision, COUNT(*) AS count FROM tracked_bets WHERE mode='PAPER' AND created_at >= ? GROUP BY decision").bind(VALIDATION_EPOCH).all<{decision:string;count:number}>(),
-      env.DB.prepare("SELECT COUNT(DISTINCT owner_key) AS testers FROM tracked_bets WHERE mode='PAPER' AND created_at >= ?").bind(VALIDATION_EPOCH).first<{testers:number}>(),
-      env.DB.prepare("SELECT AVG(closing_line_value) AS average_clv, COUNT(*) AS samples FROM tracked_bets WHERE mode='PAPER' AND created_at >= ? AND price_verified=1 AND closing_line_value IS NOT NULL").bind(VALIDATION_EPOCH).first<{average_clv:number|null;samples:number}>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM tracked_bets WHERE mode='PAPER' AND created_at >= ? AND price_verified=0 AND decision='PAPER_BET'").bind(VALIDATION_EPOCH).first<{count:number}>(),
+      db.prepare(GROUP_SQL("market")).bind(VALIDATION_EPOCH).all<GroupRow>(),
+      db.prepare(GROUP_SQL("substr(created_at,1,7)")).bind(VALIDATION_EPOCH).all<GroupRow>(),
+      db.prepare(GROUP_SQL("'all'")).bind(VALIDATION_EPOCH).first<GroupRow>(),
+      db.prepare("SELECT decision, COUNT(*) AS count FROM tracked_bets WHERE mode='PAPER' AND created_at >= ? GROUP BY decision").bind(VALIDATION_EPOCH).all<{decision:string;count:number}>(),
+      db.prepare("SELECT COUNT(DISTINCT owner_key) AS testers FROM tracked_bets WHERE mode='PAPER' AND created_at >= ?").bind(VALIDATION_EPOCH).first<{testers:number}>(),
+      db.prepare("SELECT AVG(closing_line_value) AS average_clv, COUNT(*) AS samples FROM tracked_bets WHERE mode='PAPER' AND created_at >= ? AND price_verified=1 AND closing_line_value IS NOT NULL").bind(VALIDATION_EPOCH).first<{average_clv:number|null;samples:number}>(),
+      db.prepare("SELECT COUNT(*) AS count FROM tracked_bets WHERE mode='PAPER' AND created_at >= ? AND price_verified=0 AND decision='PAPER_BET'").bind(VALIDATION_EPOCH).first<{count:number}>(),
     ]);
     const overall=overallRow?summarize(overallRow):{issued:0,settled:0,accuracy:null,paperBets:0,brier:null,roi:null,profitUnits:0,retracted:0};
     return Response.json({

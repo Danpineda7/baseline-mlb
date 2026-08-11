@@ -15,14 +15,14 @@ export function forecastCandidates(games:ForecastGame[],gameDate:string,modelVer
 
 export async function persistForecastSnapshots(games:ForecastGame[],gameDate:string,modelVersion:string){
   const rows=forecastCandidates(games,gameDate,modelVersion);if(!rows.length)return 0;
-  const {env}=await import("cloudflare:workers"),createdAt=new Date().toISOString();
-  await env.DB.batch(rows.map(row=>env.DB.prepare("INSERT OR IGNORE INTO forecast_snapshots (id,game_id,game_date,starts_at,model_version,market,selection_key,line,probability,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,'OPEN',?)").bind(row.id,row.gameId,row.gameDate,row.startsAt,row.modelVersion,row.market,row.selectionKey,row.line,row.probability,createdAt)));
+  const {getDatabase}=await import("./db.ts"),db=getDatabase(),createdAt=new Date().toISOString();
+  await db.batch(rows.map(row=>db.prepare("INSERT OR IGNORE INTO forecast_snapshots (id,game_id,game_date,starts_at,model_version,market,selection_key,line,probability,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,'OPEN',?)").bind(row.id,row.gameId,row.gameDate,row.startsAt,row.modelVersion,row.market,row.selectionKey,row.line,row.probability,createdAt)));
   return rows.length;
 }
 
 export async function persistProjectionArchives(games:unknown[],gameDate:string,modelVersion:string){
-  const {env}=await import("cloudflare:workers"),createdAt=new Date().toISOString(),now=Date.now(),rows=games.filter((game):game is {id:number;startsAt:string}=>{if(!game||typeof game!=="object"||!("id" in game)||!("startsAt" in game)||typeof game.id!=="number"||typeof game.startsAt!=="string")return false;const lead=Date.parse(game.startsAt)-now;return Number.isFinite(lead)&&lead>0&&lead<=FREEZE_WINDOW_MS;});if(!rows.length)return 0;
-  await env.DB.batch(rows.map(game=>env.DB.prepare("INSERT OR IGNORE INTO projection_archives (id,game_id,game_date,starts_at,model_version,payload_json,created_at) VALUES (?,?,?,?,?,?,?)").bind(`${modelVersion}:${gameDate}:${game.id}`,game.id,gameDate,game.startsAt,modelVersion,JSON.stringify(game),createdAt)));
+  const {getDatabase}=await import("./db.ts"),db=getDatabase(),createdAt=new Date().toISOString(),now=Date.now(),rows=games.filter((game):game is {id:number;startsAt:string}=>{if(!game||typeof game!=="object"||!("id" in game)||!("startsAt" in game)||typeof game.id!=="number"||typeof game.startsAt!=="string")return false;const lead=Date.parse(game.startsAt)-now;return Number.isFinite(lead)&&lead>0&&lead<=FREEZE_WINDOW_MS;});if(!rows.length)return 0;
+  await db.batch(rows.map(game=>db.prepare("INSERT OR IGNORE INTO projection_archives (id,game_id,game_date,starts_at,model_version,payload_json,created_at) VALUES (?,?,?,?,?,?,?)").bind(`${modelVersion}:${gameDate}:${game.id}`,game.id,gameDate,game.startsAt,modelVersion,JSON.stringify(game),createdAt)));
   return rows.length;
 }
 

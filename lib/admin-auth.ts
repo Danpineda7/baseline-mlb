@@ -11,8 +11,7 @@ async function sha256Hex(value: string) {
  * the check is equal-length regardless of what the caller sends.
  */
 export async function requireAdmin(request: Request): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const { env } = await import("cloudflare:workers");
-  const expected = (env as unknown as Record<string, unknown>).ADMIN_KEY;
+  const expected = process.env.ADMIN_KEY;
   if (typeof expected !== "string" || expected.length < 16) {
     return { ok: false, response: Response.json({ error: "Admin access is not configured on this deployment." }, { status: 503 }) };
   }

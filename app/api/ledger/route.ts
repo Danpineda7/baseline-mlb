@@ -6,11 +6,15 @@ import { GET as getProjections } from "@/app/api/mlb/projections/route";
 import { closingWindow, validAmericanOdds, CLOSING_WINDOW_MS } from "@/lib/ledger-validation";
 import { PAIR_WINDOW_MS } from "@/lib/market-validation";
 import { finalGameFromFeed, type Feed } from "@/lib/feed-grading";
+import { getDatabase } from "@/lib/db";
 
 type BetInput={ownerKey:string;gameId:number;gameDate:string;startsAt:string|null;matchup:string;market:string;selection:string;selectionKey:string;subjectId:number|null;line:number|null;americanOdds:number;oppositeOdds:number;maxPlayableOdds?:number|null;modelProbability:number;marketProbability:number;edge:number;expectedValue:number;stakeUnits:number;paperMode?:boolean;evidence?:Record<string,unknown>};
 const ownerPattern=/^[a-zA-Z0-9-]{20,80}$/;
 function valid(input:BetInput){return typeof input?.ownerKey==="string"&&ownerPattern.test(input.ownerKey)&&Number.isInteger(input.gameId)&&input.gameId>0&&typeof input.gameDate==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(input.gameDate)&&(input.startsAt==null||typeof input.startsAt==="string"&&Number.isFinite(Date.parse(input.startsAt)))&&typeof input.matchup==="string"&&input.matchup.length<=100&&typeof input.market==="string"&&input.market.length<=30&&typeof input.selection==="string"&&input.selection.length<=120&&typeof input.selectionKey==="string"&&input.selectionKey.length<=20&&validAmericanOdds(input.americanOdds)&&validAmericanOdds(input.oppositeOdds)&&[input.modelProbability,input.marketProbability,input.edge,input.expectedValue,input.stakeUnits].every(Number.isFinite);}
-async function database(){const {env}=await import("cloudflare:workers");return env.DB;}
+// API routes are always dynamic: they read the database and live MLB feeds
+// and must never be baked into the build as static responses.
+export const dynamic="force-dynamic";
+async function database(){return getDatabase();}
 // The owner key is a bearer secret: prefer the header so it stays out of URL
 // logs; the query parameter remains as a fallback.
 const ownerKeyFrom=(request:Request,url:URL)=>request.headers.get("x-owner-key")??url.searchParams.get("ownerKey")??"";

@@ -1,11 +1,11 @@
 import type { OddsEvent } from "@/lib/odds";
 
-type D1Like={prepare:(sql:string)=>{bind:(...values:unknown[])=>unknown};batch:(statements:unknown[])=>Promise<unknown>};
+import type { Database as D1Like, D1Statement } from "./db.ts";
 
 const key=(parts:Array<string|number|null|undefined>)=>parts.map(part=>String(part??"").replaceAll("|","-")).join("|");
 
 export async function archiveOddsApiEvents(db:D1Like,events:OddsEvent[]){
-  const statements=[] as unknown[];
+  const statements=[] as D1Statement[];
   for(const event of events)for(const book of event.bookmakers)for(const market of book.markets)for(const outcome of market.outcomes){
     // Provider timestamp only: a wall-clock fallback would mint a duplicate
     // observation on every poll because the timestamp is part of the row key.
