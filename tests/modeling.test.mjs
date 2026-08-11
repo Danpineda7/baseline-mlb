@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, platoonAdjustedHitProjection, playablePriceThreshold, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation } from "../lib/modeling.ts";
+import { bullpenFatigueAdjustment, closingLineValue, countOverProbability, empiricalParkFactor, fairAmerican, firstInningMarkets, hitterHitProjection, impliedProbability, inningsToDecimal, noVigProbability, opponentAdjustedStrikeouts, platoonAdjustedHitProjection, playablePriceThreshold, priceDecision, projectPeriod, projectScore, starterRunAdjustment, strikeoutExpectation, strikeoutOverProbability } from "../lib/modeling.ts";
 
 test("converts American prices and model probability consistently", () => {
   assert.equal(impliedProbability(-110)?.toFixed(4), "0.5238");
@@ -125,4 +125,21 @@ test("park factor regresses small samples and remains bounded",()=>{
   assert.ok(Math.abs(small-1)<Math.abs(large-1));
   assert.equal(empiricalParkFactor(1000,10,0,10,9),1.1);
   assert.equal(empiricalParkFactor(0,10,1000,10,9),0.9);
+});
+
+test("one-plus hit probability is binomial over expected at-bats, not Poisson",()=>{
+  const projection=hitterHitProjection(120,400,440,110);
+  assert.ok(projection);
+  assert.ok(Math.abs(projection.onePlusProbability-(1-Math.pow(1-projection.hitRate,projection.expectedAtBats)))<1e-12);
+  assert.ok(projection.onePlusProbability>1-Math.exp(-projection.expectedHits));
+});
+
+test("strikeout overs use a bounded binomial that tempers Poisson tails",()=>{
+  const over=strikeoutOverProbability(6,5.5);
+  assert.ok(over!=null&&over>0&&over<1);
+  assert.ok((strikeoutOverProbability(7,5.5)??0)>over);
+  assert.ok((strikeoutOverProbability(6,7.5)??1)<(countOverProbability(6,7.5)??0));
+  assert.equal(strikeoutOverProbability(0,5.5),null);
+  assert.equal(strikeoutOverProbability(6,-1),null);
+  assert.equal(strikeoutOverProbability(6,30.5),0);
 });

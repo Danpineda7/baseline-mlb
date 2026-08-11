@@ -26,3 +26,10 @@ test("voids missing player participation and pushes an official tie",()=>{
   assert.equal(gradeBet({...base,market:"hit",subjectId:999,selectionKey:"onePlus"},game)?.result,"VOID");
   assert.equal(gradeBet({...base,market:"moneyline"},{...game,awayRuns:5,homeRuns:5})?.result,"PUSH");
 });
+test("voids player props for recorded non-participants and keeps legacy stats gradable",()=>{
+  const withScratch={...game,players:{...game.players,30:{hits:0,strikeOuts:0,plateAppearances:0,outsPitched:0}}};
+  assert.equal(gradeBet({...base,market:"hit",subjectId:30,selectionKey:"onePlus"},withScratch)?.result,"VOID");
+  assert.equal(gradeBet({...base,market:"awayK",subjectId:30,line:5.5,selectionKey:"over"},withScratch)?.result,"VOID");
+  // Rows without participation fields (older data) still grade from raw stats.
+  assert.equal(gradeBet({...base,market:"hit",subjectId:10,selectionKey:"onePlus"},withScratch)?.result,"WON");
+});

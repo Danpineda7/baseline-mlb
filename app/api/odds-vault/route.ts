@@ -1,5 +1,10 @@
+import { requireAdmin } from "@/lib/admin-auth";
+
 type Env={DB:{prepare:(sql:string)=>{bind:(...values:unknown[])=>{run:()=>Promise<unknown>};first:<T=unknown>()=>Promise<T|null>;all:<T=unknown>()=>Promise<{results:T[]}>}}};
 const validOdds=(value:unknown)=>Number.isInteger(value)&&((Number(value)>=100&&Number(value)<=5000)||(Number(value)<=-100&&Number(value)>=-5000));
+// Manual captures must arrive pre-normalized so the validation pipeline can
+// pair the two sides without guessing from display text.
+const CANONICAL_SELECTIONS:Record<string,readonly [string,string]>={moneyline:["home","away"],over:["over","under"],f5:["home","away"],nrfi:["nrfi","yrfi"]};
 
 export async function GET(){
   const {env}=await import("cloudflare:workers") as unknown as {env:Env};
@@ -10,11 +15,16 @@ export async function GET(){
 }
 
 export async function POST(request:Request){
+  const admin=await requireAdmin(request);if(!admin.ok)return admin.response;
   const {env}=await import("cloudflare:workers") as unknown as {env:Env};
   const body=await request.json() as Record<string,unknown>;const selectedOdds=Number(body.selectedOdds),oppositeOdds=Number(body.oppositeOdds),gameId=Number(body.gameId),line=body.line==null?null:Number(body.line);
-  if(!Number.isInteger(gameId)||!String(body.gameDate||"").match(/^\d{4}-\d{2}-\d{2}$/)||!body.awayTeam||!body.homeTeam||!body.market||!body.selection||!body.oppositeSelection||!validOdds(selectedOdds)||!validOdds(oppositeOdds)||Number.isNaN(line))return Response.json({error:"A game, market, both selections and valid American odds are required."},{status:400});
-  const observedAt=new Date().toISOString(),sportsbook=String(body.sportsbook||"Manual entry").slice(0,80),base=[gameId,body.market,line,observedAt],metadata=JSON.stringify({paired:true});
+  const canonicalMarket=String(body.canonicalMarket??""),canonicalSelection=String(body.canonicalSelection??""),canonicalOpposite=String(body.canonicalOppositeSelection??"");
+  const selectionPair=CANONICAL_SELECTIONS[canonicalMarket];
+  const validPair=Boolean(selectionPair&&selectionPair.includes(canonicalSelection)&&selectionPair.includes(canonicalOpposite)&&canonicalSelection!==canonicalOpposite);
+  if(!Number.isInteger(gameId)||!String(body.gameDate||"").match(/^\d{4}-\d{2}-\d{2}$/)||!body.awayTeam||!body.homeTeam||!validPair||!validOdds(selectedOdds)||!validOdds(oppositeOdds)||Number.isNaN(line))return Response.json({error:"A game, canonical market, both canonical selections and valid American odds are required."},{status:400});
+  if(canonicalMarket==="over"&&(line==null||line<3.5||line>15.5))return Response.json({error:"Totals snapshots need a line between 3.5 and 15.5."},{status:400});
+  const observedAt=new Date().toISOString(),sportsbook=String(body.sportsbook||"Manual entry").slice(0,80),base=[gameId,canonicalMarket,line,observedAt];
   const insert=`INSERT INTO market_odds_observations (id,game_id,provider_event_id,game_date,starts_at,away_team,home_team,provider,sportsbook,market,selection,line,american_odds,observed_at,source_tier,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
-  await Promise.all([[body.selection,selectedOdds],[body.oppositeSelection,oppositeOdds]].map(async ([selection,odds],index)=>env.DB.prepare(insert).bind(`manual|${base.join("|")}|${index}`,gameId,null,body.gameDate,body.startsAt??null,body.awayTeam,body.homeTeam,"Manual",sportsbook,body.market,selection,line,odds,observedAt,"manual",metadata).run()));
+  await Promise.all([[canonicalSelection,selectedOdds],[canonicalOpposite,oppositeOdds]].map(async ([selection,odds],index)=>env.DB.prepare(insert).bind(`manual|${base.join("|")}|${index}`,gameId,null,body.gameDate,body.startsAt??null,body.awayTeam,body.homeTeam,"Manual",sportsbook,canonicalMarket,selection,line,odds,observedAt,"manual",JSON.stringify({paired:true,canonicalMarket,canonicalSelection:selection})).run()));
   return Response.json({saved:2,observedAt});
 }

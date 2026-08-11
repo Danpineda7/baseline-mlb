@@ -45,13 +45,18 @@ export function countOverProbability(expectedCount:number,line:number){
   return clamp(1-underOrEqual,0,1);
 }
 
+// 1+ hit is a per-at-bat event: binomial over expected at-bats. The previous
+// Poisson form (1-exp(-expectedHits)) overweighted multi-hit games and
+// systematically underestimated 1+ hit probability by ~4-7 points.
+const onePlusHitProbability=(hitRate:number,expectedAtBats:number)=>1-Math.pow(1-hitRate,expectedAtBats);
+
 export function hitterHitProjection(hits:number,atBats:number,plateAppearances:number,gamesPlayed:number,leagueAverage=0.245){
   if(atBats<=0||gamesPlayed<=0||hits<0)return null;
   const reliability=atBats/(atBats+100);
   const hitRate=clamp(reliability*(hits/atBats)+(1-reliability)*leagueAverage,0.12,0.4);
   const expectedAtBats=clamp((plateAppearances/gamesPlayed)*0.91,2.8,4.6);
   const expectedHits=hitRate*expectedAtBats;
-  return {hitRate,expectedAtBats,expectedHits,onePlusProbability:1-Math.exp(-expectedHits)};
+  return {hitRate,expectedAtBats,expectedHits,onePlusProbability:onePlusHitProbability(hitRate,expectedAtBats)};
 }
 
 export function platoonAdjustedHitProjection(base:{hitRate:number;expectedAtBats:number;expectedHits:number;onePlusProbability:number}|null,splitHits:number,splitAtBats:number){
@@ -59,7 +64,21 @@ export function platoonAdjustedHitProjection(base:{hitRate:number;expectedAtBats
   const reliability=splitAtBats/(splitAtBats+80);
   const adjustedRate=clamp(reliability*(splitHits/splitAtBats)+(1-reliability)*base.hitRate,base.hitRate*0.8,base.hitRate*1.2);
   const expectedHits=adjustedRate*base.expectedAtBats;
-  return {...base,hitRate:adjustedRate,expectedHits,onePlusProbability:1-Math.exp(-expectedHits)};
+  return {...base,hitRate:adjustedRate,expectedHits,onePlusProbability:onePlusHitProbability(adjustedRate,base.expectedAtBats)};
+}
+
+// Strikeouts are bounded by batters faced and underdispersed relative to
+// Poisson; a binomial over a typical start's batters faced keeps tail lines
+// (e.g. over 7.5) from being overestimated.
+export const TYPICAL_BATTERS_FACED=25;
+export function strikeoutOverProbability(expectedStrikeouts:number,line:number){
+  if(!Number.isFinite(expectedStrikeouts)||expectedStrikeouts<=0||!Number.isFinite(line)||line<0)return null;
+  const n=TYPICAL_BATTERS_FACED,p=clamp(expectedStrikeouts/n,0.01,0.65);
+  const minimum=Math.floor(line)+1;
+  if(minimum>n)return 0;
+  let underOrEqual=0,pmf=Math.pow(1-p,n);
+  for(let count=0;count<minimum;count+=1){underOrEqual+=pmf;pmf*=((n-count)/(count+1))*(p/(1-p));}
+  return clamp(1-underOrEqual,0,1);
 }
 
 export function fairAmerican(probability: number) {

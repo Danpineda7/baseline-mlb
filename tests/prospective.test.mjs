@@ -21,3 +21,10 @@ test("prospective metrics summarize only scored forecasts by market",()=>{
   assert.equal(result.markets.find(row=>row.market==="moneyline").count,2);
   assert.equal(result.bands.reduce((sum,row)=>sum+row.count,0),3);
 });
+
+test("forecasts freeze only inside the six-hour pre-pitch window",()=>{
+  const farOut=forecastCandidates([game],"2026-07-25","v1",Date.parse("2026-07-25T08:00:00Z"));
+  assert.equal(farOut.length,0);
+  const inWindow=forecastCandidates([game],"2026-07-25","v1",Date.parse("2026-07-25T15:00:00Z"));
+  assert.equal(inWindow.length,4);
+});

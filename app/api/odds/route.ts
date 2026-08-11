@@ -1,4 +1,38 @@
 import { consensusOdds, type OddsEvent } from "@/lib/odds";
 import { archiveOddsApiEvents } from "@/lib/odds-vault";
+import { getOrCompute } from "@/lib/computed-cache";
+import { logSystemEvent } from "@/lib/system-events";
 
-export async function GET(){const {env}=await import("cloudflare:workers");const runtime=env as unknown as Record<string,string|undefined>,key=runtime.ODDS_API_KEY;if(!key)return Response.json({configured:false,provider:"The Odds API",games:[],message:"Manual capture is active. Add a free provider key later for automatic collection."});const endpoint=new URL("https://api.the-odds-api.com/v4/sports/baseball_mlb/odds");endpoint.searchParams.set("apiKey",key);endpoint.searchParams.set("regions","us");endpoint.searchParams.set("markets","h2h,totals");endpoint.searchParams.set("oddsFormat","american");endpoint.searchParams.set("dateFormat","iso");try{const response=await fetch(endpoint,{headers:{accept:"application/json"}});if(!response.ok)throw new Error(`Odds provider responded ${response.status}`);const events=await response.json() as OddsEvent[];let archived=0;try{archived=await archiveOddsApiEvents((env as unknown as {DB:Parameters<typeof archiveOddsApiEvents>[0]}).DB,events);}catch{/* Live display remains available if archival storage is temporarily unavailable. */}return Response.json({configured:true,provider:"The Odds API",retrievedAt:new Date().toISOString(),games:consensusOdds(events),archived,quota:{remaining:response.headers.get("x-requests-remaining"),used:response.headers.get("x-requests-used")}}, {headers:{"cache-control":"private, max-age=60"}});}catch(error){return Response.json({configured:true,error:"Automatic odds are temporarily unavailable.",detail:error instanceof Error?error.message:"Unknown provider error"},{status:502});}}
+type OddsPayload={configured:true;provider:string;retrievedAt:string;games:ReturnType<typeof consensusOdds>;archived:number};
+
+export async function GET(){
+  const {env}=await import("cloudflare:workers");
+  const runtime=env as unknown as Record<string,string|undefined>,key=runtime.ODDS_API_KEY;
+  if(!key)return Response.json({configured:false,provider:"The Odds API",games:[],message:"Manual capture is active. Add a free provider key later for automatic collection."});
+  try{
+    // One shared 60-second artifact for every visitor: public traffic (or a
+    // refresh loop) must not multiply provider quota usage, and quota counters
+    // are no longer exposed in the public payload.
+    const compute=async():Promise<OddsPayload>=>{
+      const endpoint=new URL("https://api.the-odds-api.com/v4/sports/baseball_mlb/odds");
+      endpoint.searchParams.set("apiKey",key);endpoint.searchParams.set("regions","us");endpoint.searchParams.set("markets","h2h,totals");endpoint.searchParams.set("oddsFormat","american");endpoint.searchParams.set("dateFormat","iso");
+      const response=await fetch(endpoint,{headers:{accept:"application/json"}});
+      if(!response.ok)throw new Error(`Odds provider responded ${response.status}`);
+      const events=await response.json() as OddsEvent[];
+      let archived=0;
+      try{archived=await archiveOddsApiEvents((env as unknown as {DB:Parameters<typeof archiveOddsApiEvents>[0]}).DB,events);}
+      catch(error){await logSystemEvent("odds-archive-failure","warning",{detail:error instanceof Error?error.message:"unknown"});}
+      return {configured:true,provider:"The Odds API",retrievedAt:new Date().toISOString(),games:consensusOdds(events),archived};
+    };
+    let payload:OddsPayload;
+    try{
+      const cached=await getOrCompute((env as unknown as {DB:Parameters<typeof getOrCompute>[0]}).DB,"odds:the-odds-api","odds-feed",60,compute);
+      payload=cached.value;
+    }catch{
+      payload=await compute();
+    }
+    return Response.json(payload,{headers:{"cache-control":"private, max-age=60"}});
+  }catch(error){
+    return Response.json({configured:true,error:"Automatic odds are temporarily unavailable.",detail:error instanceof Error?error.message:"Unknown provider error"},{status:502});
+  }
+}

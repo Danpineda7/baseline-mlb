@@ -2,9 +2,14 @@ type ForecastGame={id:number;startsAt:string|null;quality:{teamRecords:boolean;s
 export type ForecastCandidate={id:string;gameId:number;gameDate:string;startsAt:string;modelVersion:string;market:string;selectionKey:string;line:number|null;probability:number};
 export type ScoredForecast={market:string;probability:number;outcome:number;brier:number};
 
+// Forecasts freeze only inside this pre-pitch window. Without it, anyone
+// browsing a future date froze that slate days early with sparse features,
+// and first-write-wins kept the stale version forever.
+export const FREEZE_WINDOW_MS=6*60*60*1000;
+
 export function forecastCandidates(games:ForecastGame[],gameDate:string,modelVersion:string,now=Date.now()){
   const rows:ForecastCandidate[]=[];
-  for(const game of games){if(!game.startsAt||Date.parse(game.startsAt)<=now||!game.quality.teamRecords||!game.quality.starterStats)continue;const markets=[{market:"moneyline",selectionKey:"home",line:null,probability:game.home.winProbability},{market:"over",selectionKey:"over",line:game.total.line,probability:game.total.overProbability},{market:"f5",selectionKey:"home",line:null,probability:game.firstFive.homeWinProbability},{market:"nrfi",selectionKey:"nrfi",line:null,probability:game.firstInning.nrfiProbability}];for(const market of markets)rows.push({id:`${modelVersion}:${gameDate}:${game.id}:${market.market}:${market.selectionKey}:${market.line??"na"}`,gameId:game.id,gameDate,startsAt:game.startsAt,modelVersion,market:market.market,selectionKey:market.selectionKey,line:market.line,probability:market.probability});}
+  for(const game of games){if(!game.startsAt)continue;const lead=Date.parse(game.startsAt)-now;if(!Number.isFinite(lead)||lead<=0||lead>FREEZE_WINDOW_MS||!game.quality.teamRecords||!game.quality.starterStats)continue;const markets=[{market:"moneyline",selectionKey:"home",line:null,probability:game.home.winProbability},{market:"over",selectionKey:"over",line:game.total.line,probability:game.total.overProbability},{market:"f5",selectionKey:"home",line:null,probability:game.firstFive.homeWinProbability},{market:"nrfi",selectionKey:"nrfi",line:null,probability:game.firstInning.nrfiProbability}];for(const market of markets)rows.push({id:`${modelVersion}:${gameDate}:${game.id}:${market.market}:${market.selectionKey}:${market.line??"na"}`,gameId:game.id,gameDate,startsAt:game.startsAt,modelVersion,market:market.market,selectionKey:market.selectionKey,line:market.line,probability:market.probability});}
   return rows;
 }
 
@@ -16,7 +21,7 @@ export async function persistForecastSnapshots(games:ForecastGame[],gameDate:str
 }
 
 export async function persistProjectionArchives(games:unknown[],gameDate:string,modelVersion:string){
-  const {env}=await import("cloudflare:workers"),createdAt=new Date().toISOString(),now=Date.now(),rows=games.filter((game):game is {id:number;startsAt:string}=>Boolean(game&&typeof game==="object"&&"id" in game&&"startsAt" in game&&typeof game.id==="number"&&typeof game.startsAt==="string"&&Date.parse(game.startsAt)>now));if(!rows.length)return 0;
+  const {env}=await import("cloudflare:workers"),createdAt=new Date().toISOString(),now=Date.now(),rows=games.filter((game):game is {id:number;startsAt:string}=>{if(!game||typeof game!=="object"||!("id" in game)||!("startsAt" in game)||typeof game.id!=="number"||typeof game.startsAt!=="string")return false;const lead=Date.parse(game.startsAt)-now;return Number.isFinite(lead)&&lead>0&&lead<=FREEZE_WINDOW_MS;});if(!rows.length)return 0;
   await env.DB.batch(rows.map(game=>env.DB.prepare("INSERT OR IGNORE INTO projection_archives (id,game_id,game_date,starts_at,model_version,payload_json,created_at) VALUES (?,?,?,?,?,?,?)").bind(`${modelVersion}:${gameDate}:${game.id}`,game.id,gameDate,game.startsAt,modelVersion,JSON.stringify(game),createdAt)));
   return rows.length;
 }
