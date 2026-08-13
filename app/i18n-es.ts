@@ -416,6 +416,8 @@ Object.assign(ES_TRANSLATIONS, {
   "Show fewer": "Ver menos",
   "Why these numbers?": "¿De dónde salen estos números?",
   "Hide model factors": "Ocultar los factores",
+  "Close menu": "Cerrar menú",
+  "Tap any game above to see its full analysis": "Toca cualquier juego de arriba para ver su análisis completo",
   "team records": "récords de los equipos",
   "probable-starter statistics": "números de los abridores",
   "recent bullpen workload": "carga reciente del bullpen",

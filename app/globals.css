@@ -215,3 +215,9 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:1
 .lang-switch button{flex:1;border:1px solid #2c463b;border-radius:7px;background:transparent;color:#93a39b;font-size:13px;font-weight:800;padding:7px 0;cursor:pointer}
 .lang-switch button.active{background:var(--lime);border-color:var(--lime);color:#10211c}
 @media(max-width:780px){.topbar{min-height:0;padding:12px 0}.view-subtitle{display:none}}
+/* Mobile menu: explicit close + tap-outside dismissal */
+.sidebar-close{display:none;margin-left:auto;border:0;background:#1a332a;color:#dbe8df;width:32px;height:32px;border-radius:8px;font-size:20px;line-height:1;cursor:pointer}
+.nav-backdrop{display:none}
+@media(max-width:780px){.sidebar-close{display:grid;place-items:center}.nav-backdrop{display:block;position:fixed;inset:0;background:#0e211b66;z-index:15}}
+.game-study.placeholder{border:1px dashed #c8d2c9;background:#fbfcfa;box-shadow:none}
+.game-study.placeholder .slate-state{font-size:16px}
