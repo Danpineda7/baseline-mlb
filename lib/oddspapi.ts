@@ -3,10 +3,29 @@ type Fixture={fixtureId:string;sportId:number;tournamentId:number;startTime:stri
 type Market={marketId:number;marketName:string;playerProp:boolean;sportId:number;handicap:number|null;period:string;marketType:string;outcomes:Array<{outcomeId:number;outcomeName:string}>};
 type GameRef={id:number;awayTeam:string;homeTeam:string};
 import { sameMlbTeam } from "./mlb-teams.ts";
+import { getOrCompute } from "./computed-cache.ts";
 
 const api="https://api.oddspapi.io/v4";
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 const american=(decimal:number)=>Math.round(decimal>=2?(decimal-1)*100:-100/(decimal-1));
+const META_TTL_SECONDS=14*24*60*60; // sports/markets catalogs barely change; cache them hard
+const COOLDOWN_HOURS=24;
+const COOLDOWN_ID="oddspapi:cooldown";
+
+// Once the free-tier quota is exhausted, every retry still costs a request
+// and returns the same 429 — hammering it hourly wastes calls and hides the
+// outage in Netlify logs nobody checks. A cooldown marker makes the outage
+// short-circuit for free (0 external requests) and shows up in the app.
+export async function oddsPapiCooldown(db:D1Like):Promise<{active:boolean;reason:string|null;until:string|null}>{
+  const row=await db.prepare("SELECT payload_json,expires_at FROM computed_artifacts WHERE id=?").bind(COOLDOWN_ID).first<{payload_json:string;expires_at:string}>();
+  if(!row||row.expires_at<=new Date().toISOString())return{active:false,reason:null,until:null};
+  const payload=JSON.parse(row.payload_json) as {reason:string};
+  return{active:true,reason:payload.reason,until:row.expires_at};
+}
+async function setCooldown(db:D1Like,reason:string){
+  const expiresAt=new Date(Date.now()+COOLDOWN_HOURS*60*60*1000).toISOString();
+  await db.prepare("INSERT OR REPLACE INTO computed_artifacts (id,kind,payload_json,computed_at,expires_at) VALUES (?,?,?,?,?)").bind(COOLDOWN_ID,"oddspapi-cooldown",JSON.stringify({reason}),new Date().toISOString(),expiresAt).run();
+}
 // Canonical mapping is deliberately conservative: anything not confidently
 // recognized returns {market:null} and is archived raw but never validated.
 export const canonical=(market:Market|undefined,outcomeName:string,participant1Role:"home"|"away"|null):{market:string|null;selection:string|null}=>{
@@ -33,11 +52,28 @@ export const canonical=(market:Market|undefined,outcomeName:string,participant1R
 };
 async function get<T>(path:string,key:string,params:Record<string,string>={}){const url=new URL(`${api}/${path}`);url.searchParams.set("apiKey",key);for(const [name,value] of Object.entries(params))url.searchParams.set(name,value);const response=await fetch(url,{headers:{accept:"application/json"}});if(!response.ok){const detail=(await response.text()).slice(0,180);throw new Error(`OddsPapi ${path} returned ${response.status}${detail?`: ${detail}`:""}`);}return response.json() as Promise<T>;}
 
+// The sport and market catalogs are near-static; caching them turns a
+// 4-request import cycle into 2, roughly doubling how far a fixed request
+// quota stretches.
+const cachedSports=(db:D1Like,key:string)=>getOrCompute(db,"oddspapi:sports","oddspapi-meta",META_TTL_SECONDS,()=>get<Array<{sportId:number;sportName:string}>>("sports",key,{language:"en"}));
+const cachedMarkets=(db:D1Like,key:string)=>getOrCompute(db,"oddspapi:markets","oddspapi-meta",META_TTL_SECONDS,()=>get<Market[]>("markets",key,{language:"en"}));
+
 export async function syncOddsPapiDate(db:D1Like,key:string,date:string,games:GameRef[],limit=3){
-  const sports=await get<Array<{sportId:number;sportName:string}>>("sports",key,{language:"en"});const baseball=sports.find(item=>item.sportName.toLowerCase()==="baseball");if(!baseball)throw new Error("OddsPapi did not return its Baseball sport.");
+  const cooldown=await oddsPapiCooldown(db);
+  if(cooldown.active)throw new Error(`OddsPapi import is paused until ${cooldown.until} (${cooldown.reason}). No request was sent.`);
+  try{
+    return await syncOddsPapiDateUnguarded(db,key,date,games,limit);
+  }catch(error){
+    if(error instanceof Error&&/\b429\b|request limit exceeded/i.test(error.message))await setCooldown(db,"provider rate limit");
+    throw error;
+  }
+}
+
+async function syncOddsPapiDateUnguarded(db:D1Like,key:string,date:string,games:GameRef[],limit=3){
+  const sportsResult=await cachedSports(db,key);const baseball=sportsResult.value.find(item=>item.sportName.toLowerCase()==="baseball");if(!baseball)throw new Error("OddsPapi did not return its Baseball sport.");
   const fixtures=await get<Fixture[]>("fixtures",key,{sportId:String(baseball.sportId),from:`${date}T00:00:00Z`,to:`${date}T23:59:59Z`,hasOdds:"true",language:"en"});
   const mlbFixtures=fixtures.filter(item=>/major league|\bmlb\b/i.test(item.tournamentName));
-  const marketList=await get<Market[]>("markets",key,{language:"en"}),markets=new Map(marketList.filter(item=>item.sportId===baseball.sportId).map(item=>[String(item.marketId),item]));
+  const marketsResult=await cachedMarkets(db,key),markets=new Map(marketsResult.value.filter(item=>item.sportId===baseball.sportId).map(item=>[String(item.marketId),item]));
   const imported=await (db.prepare(`SELECT DISTINCT provider_event_id AS id FROM market_odds_observations WHERE provider='OddsPapi' AND game_date=?`).bind(date) as {all:()=>Promise<{results:Array<{id:string}>}>}).all();const done=new Set(imported.results.map(row=>row.id));
   const queue=mlbFixtures.filter(item=>!done.has(item.fixtureId)).slice(0,Math.max(1,Math.min(4,limit)));let observations=0,matched=0,unmappedMarkets=0;const unmatchedFixtures:string[]=[];
   for(let fixtureIndex=0;fixtureIndex<queue.length;fixtureIndex++){

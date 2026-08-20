@@ -221,3 +221,4 @@ footer { display:flex; justify-content:space-between; color:#8a958e; font-size:1
 @media(max-width:780px){.sidebar-close{display:grid;place-items:center}.nav-backdrop{display:block;position:fixed;inset:0;background:#0e211b66;z-index:15}}
 .game-study.placeholder{border:1px dashed #c8d2c9;background:#fbfcfa;box-shadow:none}
 .game-study.placeholder .slate-state{font-size:16px}
+.notice.warn{border-color:#f0dba8;background:#fdf7e8}.notice.warn>span{background:#a9740a;color:#fff}

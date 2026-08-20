@@ -4,7 +4,12 @@
 //     thanks to the slate-context cache);
 //  2. settles finished games against official MLB finals;
 //  3. once per hour in the afternoon/evening window, imports one fixture's
-//     historical odds from OddsPapi (gentle on the free-tier rate limits).
+//     historical odds from OddsPapi. If that provider's free-tier quota is
+//     exhausted, lib/oddspapi.ts sets a 24h cooldown so this becomes a cheap
+//     no-op (one DB read, zero external requests) instead of a wasted call;
+//  4. once every 4 hours, refreshes live moneyline/totals consensus from The
+//     Odds API — a no-op until ODDS_API_KEY is set, and throttled to stay
+//     well under its 500-credit/month free tier once it is.
 // Without this function the app still works — it just needs a daily visitor.
 
 export default async () => {
@@ -47,6 +52,22 @@ export default async () => {
     }
   } else {
     results.oddsImport = "skipped (outside window, already this hour, or keys missing)";
+  }
+
+  // 500 free credits/month at 2 credits/call (h2h + totals, 1 region) allows
+  // roughly 8 calls/day; once every 4 hours (~6/day) leaves headroom for
+  // direct site visits, which hit the same cached endpoint.
+  const fourHourSlot = hourUtc % 4 === 0 && firstSlotOfHour;
+  if (process.env.ODDS_API_KEY && fourHourSlot) {
+    try {
+      const response = await fetch(`${base}/api/odds`, { headers: { accept: "application/json" } });
+      const payload = (await response.json()) as { configured?: boolean; archived?: number; error?: string };
+      results.oddsRefresh = { status: response.status, configured: payload.configured ?? false, archived: payload.archived ?? 0, error: payload.error };
+    } catch (error) {
+      results.oddsRefresh = { error: String(error) };
+    }
+  } else {
+    results.oddsRefresh = process.env.ODDS_API_KEY ? "skipped (not this 4h slot)" : "skipped (ODDS_API_KEY not set)";
   }
 
   console.log(JSON.stringify(results));

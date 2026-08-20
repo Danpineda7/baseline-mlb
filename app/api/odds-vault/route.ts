@@ -1,5 +1,8 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getDatabase } from "@/lib/db";
+import { oddsPapiCooldown } from "@/lib/oddspapi";
+
+const STALE_AFTER_MS=36*60*60*1000;
 
 // API routes are always dynamic: they read the database and live MLB feeds
 // and must never be baked into the build as static responses.
@@ -14,7 +17,12 @@ export async function GET(){
   const db=getDatabase();
   const summary=await db.prepare(`SELECT COUNT(*) AS observations, COUNT(DISTINCT game_id) AS games, MIN(observed_at) AS first_observed_at, MAX(observed_at) AS last_observed_at FROM market_odds_observations`).first<{observations:number;games:number;first_observed_at:string|null;last_observed_at:string|null}>();
   const sources=await db.prepare(`SELECT provider, source_tier, COUNT(*) AS observations FROM market_odds_observations GROUP BY provider,source_tier ORDER BY observations DESC`).all<{provider:string;source_tier:string;observations:number}>();
-  return Response.json({summary:summary??{observations:0,games:0,first_observed_at:null,last_observed_at:null},sources:sources.results,providers:{oddsPapi:{configured:Boolean(process.env.ODDS_PAPI_KEY),historicalFrom:"2026-01-01",status:process.env.ODDS_PAPI_KEY?"ready":"free key required"},theOddsApi:{configured:Boolean(process.env.ODDS_API_KEY),status:process.env.ODDS_API_KEY?"collecting current odds":"optional"}},cost:"$0"});
+  // Surface the import health here instead of only in server logs: a
+  // provider quota outage should be visible in the app, not a silent stall.
+  const cooldown=await oddsPapiCooldown(db).catch(()=>({active:false,reason:null,until:null}));
+  const lastObservedAt=summary?.last_observed_at??null;
+  const stale=Boolean(lastObservedAt&&Date.now()-Date.parse(lastObservedAt)>STALE_AFTER_MS);
+  return Response.json({summary:summary??{observations:0,games:0,first_observed_at:null,last_observed_at:null},sources:sources.results,health:{stale,cooldown},providers:{oddsPapi:{configured:Boolean(process.env.ODDS_PAPI_KEY),historicalFrom:"2026-01-01",status:process.env.ODDS_PAPI_KEY?"ready":"free key required"},theOddsApi:{configured:Boolean(process.env.ODDS_API_KEY),status:process.env.ODDS_API_KEY?"collecting current odds":"optional"}},cost:"$0"});
 }
 
 export async function POST(request:Request){
